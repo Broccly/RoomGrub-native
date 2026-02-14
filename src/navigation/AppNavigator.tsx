@@ -1,0 +1,122 @@
+import React from 'react';
+import { View, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+import HomeScreen from '../screens/HomeScreen';
+import AddGroceryScreen from '../screens/AddGroceryScreen';
+import MembersScreen from '../screens/MembersScreen';
+import MemberDetailScreen from '../screens/MemberDetailScreen';
+import InviteMemberScreen from '../screens/InviteMemberScreen';
+import BalanceScreen from '../screens/BalanceScreen';
+import ExpensesScreen from '../screens/ExpensesScreen';
+import PaymentsScreen from '../screens/PaymentsScreen';
+import RecordPaymentScreen from '../screens/RecordPaymentScreen';
+import SplitsScreen from '../screens/SplitsScreen';
+import AdminScreen from '../screens/AdminScreen';
+import SettingsScreen from '../screens/SettingsScreen';
+
+const Stack = createNativeStackNavigator();
+
+const headerStyle = {
+  headerStyle: { backgroundColor: '#fff' },
+  headerTintColor: '#333',
+  headerTitleStyle: { fontWeight: '600' as const },
+  headerShadowVisible: false,
+};
+
+export default function AppNavigator() {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator
+        initialRouteName="RoomHome"
+        screenOptions={{ ...headerStyle }}
+      >
+        {/* Main Screens */}
+        <Stack.Screen
+          name="RoomHome"
+          component={HomeScreen}
+          initialParams={{ room_id: '42' }}
+          options={({ navigation, route }: any) => ({
+            title: 'RoomGrub',
+            headerRight: () => (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <SettingsButton
+                  onPress={() =>
+                    navigation.navigate('Settings', {
+                      room_id: route.params?.room_id,
+                    })
+                  }
+                />
+              </View>
+            ),
+          })}
+        />
+        <Stack.Screen
+          name="AddGrocery"
+          component={AddGroceryScreen}
+          options={{ title: 'Add Grocery' }}
+        />
+        <Stack.Screen
+          name="Members"
+          component={MembersScreen}
+          options={{ title: 'Members' }}
+        />
+        <Stack.Screen
+          name="MemberDetail"
+          component={MemberDetailScreen}
+          options={{ title: 'Member Details' }}
+        />
+        <Stack.Screen
+          name="InviteMember"
+          component={InviteMemberScreen}
+          options={{ title: 'Invite Member' }}
+        />
+        <Stack.Screen
+          name="Balance"
+          component={BalanceScreen}
+          options={{ title: 'Balance' }}
+        />
+        <Stack.Screen
+          name="Expenses"
+          component={ExpensesScreen}
+          options={{ title: 'Expenses' }}
+        />
+        <Stack.Screen
+          name="Payments"
+          component={PaymentsScreen}
+          options={{ title: 'Payments' }}
+        />
+        <Stack.Screen
+          name="RecordPayment"
+          component={RecordPaymentScreen}
+          options={{ title: 'Record Payment' }}
+        />
+        <Stack.Screen
+          name="Splits"
+          component={SplitsScreen}
+          options={{ title: 'Splits' }}
+        />
+        <Stack.Screen
+          name="Admin"
+          component={AdminScreen}
+          options={{ title: 'Admin' }}
+        />
+        <Stack.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{ title: 'Settings' }}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+function SettingsButton({ onPress }: { onPress: () => void }) {
+  return (
+    <TouchableOpacity onPress={onPress} style={{ padding: 4 }}>
+      <Ionicons name="settings-outline" size={22} color="#333" />
+    </TouchableOpacity>
+  );
+}
