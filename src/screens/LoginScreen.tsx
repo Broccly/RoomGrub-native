@@ -1,37 +1,86 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   Image,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
+  Platform,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri } from 'expo-auth-session';
 import { supabase } from '../utils/supabase';
 
-WebBrowser.maybeCompleteAuthSession();
+if (Platform.OS !== 'web') {
+  WebBrowser.maybeCompleteAuthSession();
+}
 
-const { width } = Dimensions.get('window');
 
-export default function LoginScreen() {
+export default function LoginScreen({ navigation }: any) {
+  useEffect(() => {
+    const completeWebCallbackIfPresent = async () => {
+      if (Platform.OS !== 'web') return;
+      if (window.location.pathname !== '/auth/callback') return;
+
+      const hash = window.location.hash.startsWith('#')
+        ? window.location.hash.slice(1)
+        : '';
+      const params = new URLSearchParams(hash);
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+
+      if (accessToken && refreshToken) {
+        await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        window.history.replaceState({}, '', '/');
+        navigation.replace('AuthCallback');
+      }
+    };
+
+    completeWebCallbackIfPresent()
+      .catch(() => undefined)
+      .finally(() => {
+        supabase.auth.getSession().then(({ data }) => {
+          if (data.session) {
+            navigation.replace('AuthCallback');
+          }
+        });
+      });
+  }, [navigation]);
+
   const signInWithGoogle = async () => {
-    const redirectUrl = makeRedirectUri();
+    const redirectUrl = Platform.OS === 'web'
+      ? `${window.location.origin}/auth/callback`
+      : 'roomgrub://auth/callback';
+    console.log('Redirect URL:', redirectUrl);
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
+        ...(Platform.OS === 'web' ? { skipBrowserRedirect: true } : {}),
       },
     });
+
+    if (error) {
+      console.error('OAuth error:', error);
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      if (data?.url) {
+        window.location.assign(data.url);
+      }
+      return;
+    }
 
     if (data?.url) {
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
       if (result.type === 'success') {
         const url = result.url;
-        // Extract tokens from URL fragment
-        const params = new URLSearchParams(url.split('#')[1]);
+        const hash = url.split('#')[1] || '';
+        const params = new URLSearchParams(hash);
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
         if (accessToken && refreshToken) {
@@ -39,12 +88,9 @@ export default function LoginScreen() {
             access_token: accessToken,
             refresh_token: refreshToken,
           });
+          navigation.replace('AuthCallback');
         }
       }
-    }
-
-    if (error) {
-      console.error('OAuth error:', error);
     }
   };
 
