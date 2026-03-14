@@ -6,19 +6,36 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
+import { api } from '../services/api';
 
 export default function InviteMemberScreen({ route }: any) {
-  const { room_id } = route.params;
+  const room_id = Number(route.params.room_id);
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleInvite = () => {
+  const handleInvite = async () => {
     if (!email) {
       setStatus('Please enter a valid email.');
       return;
     }
-    setStatus(`Invite sent to ${email} (mock)`);
-    setEmail('');
+
+    setLoading(true);
+    setStatus('');
+
+    try {
+      const result = await api.inviteMember(room_id, email);
+      if (result.status === 'joined_existing_user') {
+        setStatus(`User added to your room: ${email}`);
+      } else {
+        setStatus(`Invite sent to ${email}`);
+      }
+      setEmail('');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to send invite');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -36,8 +53,8 @@ export default function InviteMemberScreen({ route }: any) {
           placeholderTextColor="#999"
         />
 
-        <TouchableOpacity style={styles.button} onPress={handleInvite}>
-          <Text style={styles.buttonText}>Send Invite</Text>
+        <TouchableOpacity style={styles.button} onPress={handleInvite} disabled={loading}>
+          <Text style={styles.buttonText}>{loading ? 'Sending...' : 'Send Invite'}</Text>
         </TouchableOpacity>
 
         {status !== '' && <Text style={styles.status}>{status}</Text>}

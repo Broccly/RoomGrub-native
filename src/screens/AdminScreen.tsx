@@ -1,51 +1,81 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { formatCurrency } from '../utils/format';
-import { MOCK_USERS, MOCK_EXPENSES, MOCK_BALANCE } from '../utils/mockData';
+import { api } from '../services/api';
+import { UserSummary, ExpenseItem, PaymentItem } from '../types/api';
 
-export default function AdminScreen({ route, navigation }: any) {
-  const { room_id } = route.params;
+export default function AdminScreen({ route }: any) {
+  const room_id = Number(route.params.room_id);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [members, setMembers] = useState<UserSummary[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+  const [payments, setPayments] = useState<PaymentItem[]>([]);
+
+  const loadData = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      const [membersResult, expensesResult, paymentsResult] = await Promise.all([
+        api.listMembers(room_id),
+        api.listExpenses(room_id, { limit: 200 }),
+        api.listPayments(room_id, { limit: 200 }),
+      ]);
+
+      setMembers(membersResult.members);
+      setExpenses(expensesResult.items);
+      setPayments(paymentsResult.items);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [room_id]);
 
   const { memberStats, totalRoomStats } = useMemo(() => {
-    const membersData = MOCK_USERS;
-    const allPurchases = MOCK_EXPENSES;
-    const allPayments = MOCK_BALANCE;
+    const purchasesByUser = new Map<number, ExpenseItem[]>();
+    const paymentsByUser = new Map<number, PaymentItem[]>();
 
-    const purchasesByUser = new Map<string, any[]>();
-    const paymentsByUser = new Map<string, any[]>();
-
-    allPurchases.forEach((p) => {
-      if (!purchasesByUser.has(p.user)) purchasesByUser.set(p.user, []);
-      purchasesByUser.get(p.user)!.push(p);
+    expenses.forEach((p) => {
+      if (!p.user_id) return;
+      if (!purchasesByUser.has(p.user_id)) purchasesByUser.set(p.user_id, []);
+      purchasesByUser.get(p.user_id)!.push(p);
     });
 
-    allPayments.forEach((p) => {
-      if (!paymentsByUser.has(p.user)) paymentsByUser.set(p.user, []);
-      paymentsByUser.get(p.user)!.push(p);
+    payments.forEach((p) => {
+      if (!p.user_id) return;
+      if (!paymentsByUser.has(p.user_id)) paymentsByUser.set(p.user_id, []);
+      paymentsByUser.get(p.user_id)!.push(p);
     });
 
-    const stats = membersData.map((member) => {
-      const purchases = purchasesByUser.get(member.email) || [];
-      const payments = paymentsByUser.get(member.email) || [];
+    const stats = members.map((member) => {
+      const memberPurchases = purchasesByUser.get(member.user_id) || [];
+      const memberPayments = paymentsByUser.get(member.user_id) || [];
 
-      const totalPurchases = purchases.reduce(
-        (sum, p) => sum + parseFloat(p.money),
+      const totalPurchases = memberPurchases.reduce(
+        (sum, p) => sum + Number(p.money),
         0
       );
-      const purchaseSettlements = payments.filter((p) => p.status === 'debit');
-      const monthlyContributions = payments.filter((p) => p.status === 'credit');
+      const purchaseSettlements = memberPayments.filter((p) => p.status === 'debit');
+      const monthlyContributions = memberPayments.filter((p) => p.status === 'credit');
 
       const totalReceived = purchaseSettlements.reduce(
-        (sum, p) => sum + parseFloat(p.amount),
+        (sum, p) => sum + Number(p.amount),
         0
       );
       const totalContributed = monthlyContributions.reduce(
-        (sum, p) => sum + parseFloat(p.amount),
+        (sum, p) => sum + Number(p.amount),
         0
       );
       const pendingAmount = totalPurchases + totalReceived;
@@ -78,13 +108,20 @@ export default function AdminScreen({ route, navigation }: any) {
     );
 
     return { memberStats: stats, totalRoomStats: roomTotals };
-  }, []);
+  }, [members, expenses, payments]);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#7b61ff" />
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}>
       <Text style={styles.heading}>Admin Dashboard</Text>
 
-      {/* Room Overview */}
       <View style={styles.overviewCard}>
         <Text style={styles.cardTitle}>Room Overview</Text>
         <View style={styles.statsGrid}>
@@ -115,7 +152,6 @@ export default function AdminScreen({ route, navigation }: any) {
         </View>
       </View>
 
-      {/* Pending Payments Alert */}
       {totalRoomStats.pendingPayments > 0 && (
         <View style={styles.alertCard}>
           <Text style={styles.alertText}>
@@ -124,10 +160,9 @@ export default function AdminScreen({ route, navigation }: any) {
         </View>
       )}
 
-      {/* Members List */}
       <Text style={styles.sectionTitle}>Members</Text>
       {memberStats.map((stat) => (
-        <View key={stat.member.id} style={styles.memberCard}>
+        <View key={stat.member.user_id} style={styles.memberCard}>
           <View style={styles.memberAvatar}>
             <Text style={styles.avatarText}>
               {stat.member.name.charAt(0).toUpperCase()}

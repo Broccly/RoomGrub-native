@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,103 +8,124 @@ import {
   Alert,
   Modal,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import useUserRole from '../hooks/useUserRole';
 import { formatCurrency, formatDate } from '../utils/format';
-import { MOCK_USERS, MOCK_EXPENSES, MOCK_BALANCE } from '../utils/mockData';
+import { api } from '../services/api';
+import { MemberDetail } from '../types/api';
 
 export default function MemberDetailScreen({ route, navigation }: any) {
-  const { room_id, member_id } = route.params;
+  const room_id = Number(route.params.room_id);
+  const member_id = Number(route.params.member_id);
   const { role, loading: roleLoading } = useUserRole();
+
+  const [data, setData] = useState<MemberDetail | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [isSettling, setIsSettling] = useState(false);
   const [showContribution, setShowContribution] = useState(false);
   const [contributionAmount, setContributionAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const member = MOCK_USERS.find((u) => u.id === member_id) || null;
-  const purchases = useMemo(
-    () => MOCK_EXPENSES.filter((e) => member && e.user === member.email),
-    [member]
-  );
-  const payments = useMemo(
-    () => MOCK_BALANCE.filter((b) => member && b.user === member.email),
-    [member]
-  );
+  const loadMember = async () => {
+    setLoading(true);
+    try {
+      const result = await api.getMemberDetail(room_id, member_id);
+      setData(result);
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load member');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const summary = useMemo(() => {
-    const totalPurchases = purchases.reduce((sum, p) => sum + parseFloat(p.money), 0);
-    const purchaseSettlements = payments.filter((p) => p.status === 'debit');
-    const monthlyContributions = payments.filter((p) => p.status === 'credit');
-    const totalReceived = purchaseSettlements.reduce((sum, p) => sum + parseFloat(p.amount), 0);
-    const totalContributed = monthlyContributions.reduce((sum, p) => sum + parseFloat(p.amount), 0);
-    const pendingAmount = totalPurchases + totalReceived;
-    return { totalPurchases, totalReceived, totalContributed, pendingAmount };
-  }, [purchases, payments]);
+  useEffect(() => {
+    loadMember();
+  }, [room_id, member_id]);
 
   const handleSettlePayment = () => {
-    if (summary.pendingAmount <= 0) return;
-    Alert.alert('Confirm', `Settle payment of ${formatCurrency(summary.pendingAmount)}?`, [
+    if (!data || data.summary.pending_amount <= 0) return;
+
+    Alert.alert('Confirm', `Settle payment of ${formatCurrency(data.summary.pending_amount)}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Settle',
-        onPress: () => {
+        onPress: async () => {
           setIsSettling(true);
-          setTimeout(() => {
-            Alert.alert('Success', 'Payment settled! (mock)');
+          try {
+            await api.createPayment(room_id, {
+              user_id: data.member.user_id,
+              amount: Math.abs(data.summary.pending_amount),
+              status: 'debit',
+            });
+            Alert.alert('Success', 'Payment settled');
+            loadMember();
+          } catch (error) {
+            Alert.alert('Error', error instanceof Error ? error.message : 'Failed to settle payment');
+          } finally {
             setIsSettling(false);
-          }, 500);
+          }
         },
       },
     ]);
   };
 
-  const handleContribution = () => {
-    if (!contributionAmount || parseFloat(contributionAmount) <= 0) return;
+  const handleContribution = async () => {
+    if (!data) return;
+
+    const amount = Number(contributionAmount);
+    if (!amount || amount <= 0) return;
+
     setIsSubmitting(true);
-    setTimeout(() => {
-      Alert.alert('Success', 'Contribution recorded! (mock)');
+    try {
+      await api.createPayment(room_id, {
+        user_id: data.member.user_id,
+        amount,
+        status: 'credit',
+      });
+      Alert.alert('Success', 'Contribution recorded');
       setContributionAmount('');
       setShowContribution(false);
+      loadMember();
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to record contribution');
+    } finally {
       setIsSubmitting(false);
-    }, 500);
+    }
   };
 
-  if (!member) {
+  if (loading || !data) {
     return (
-      <View style={styles.center}>
-        <Text>Member not found</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.link}>Go Back</Text>
-        </TouchableOpacity>
+      <View style={[styles.center, { backgroundColor: '#f0f0f0' }]}>
+        <ActivityIndicator size="large" color="#7b61ff" />
       </View>
     );
   }
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.heading}>{member.name}'s Account</Text>
+      <Text style={styles.heading}>{data.member.name}'s Account</Text>
 
-      {/* Account Overview */}
       <View style={styles.overviewCard}>
         <Text style={styles.overviewTitle}>Account Overview</Text>
         <View style={styles.statsGrid}>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Total Purchases</Text>
             <Text style={[styles.statValue, { color: '#4caf50' }]}>
-              {formatCurrency(summary.totalPurchases)}
+              {formatCurrency(data.summary.total_purchases)}
             </Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Amount Received</Text>
             <Text style={[styles.statValue, { color: '#7b61ff' }]}>
-              {formatCurrency(summary.totalReceived)}
+              {formatCurrency(data.summary.total_received)}
             </Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Contributions</Text>
             <Text style={[styles.statValue, { color: '#ff9800' }]}>
-              {formatCurrency(summary.totalContributed)}
+              {formatCurrency(data.summary.total_contributed)}
             </Text>
           </View>
           <View style={styles.statBox}>
@@ -112,23 +133,23 @@ export default function MemberDetailScreen({ route, navigation }: any) {
             <Text
               style={[
                 styles.statValue,
-                { color: summary.pendingAmount > 0 ? '#ef4444' : '#4caf50' },
+                { color: data.summary.pending_amount > 0 ? '#ef4444' : '#4caf50' },
               ]}
             >
-              {formatCurrency(summary.pendingAmount)}
+              {formatCurrency(data.summary.pending_amount)}
             </Text>
           </View>
         </View>
 
         <View style={styles.buttonRow}>
-          {summary.pendingAmount > 0 && !roleLoading && role === 'Admin' && (
+          {data.summary.pending_amount > 0 && !roleLoading && role === 'Admin' && (
             <TouchableOpacity
               style={styles.settleButton}
               onPress={handleSettlePayment}
               disabled={isSettling}
             >
               <Text style={styles.settleButtonText}>
-                {isSettling ? 'Settling...' : `Settle (${formatCurrency(summary.pendingAmount)})`}
+                {isSettling ? 'Settling...' : `Settle (${formatCurrency(data.summary.pending_amount)})`}
               </Text>
             </TouchableOpacity>
           )}
@@ -141,35 +162,33 @@ export default function MemberDetailScreen({ route, navigation }: any) {
         </View>
       </View>
 
-      {/* Purchase History */}
       <Text style={styles.sectionTitle}>Purchase History</Text>
-      {purchases.length === 0 ? (
+      {data.purchases.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyText}>No purchases found</Text>
         </View>
       ) : (
-        purchases.map((p) => (
-          <View key={p.id} style={styles.historyCard}>
+        data.purchases.map((p) => (
+          <View key={p.expense_id} style={styles.historyCard}>
             <View>
               <Text style={styles.historyItem}>{p.material}</Text>
               <Text style={styles.historyDate}>{formatDate(p.created_at)}</Text>
             </View>
             <Text style={[styles.historyAmount, { color: '#4caf50' }]}>
-              {formatCurrency(parseFloat(p.money))}
+              {formatCurrency(Number(p.money))}
             </Text>
           </View>
         ))
       )}
 
-      {/* Payment History */}
       <Text style={styles.sectionTitle}>Payment History</Text>
-      {payments.length === 0 ? (
+      {data.payments.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyText}>No payments found</Text>
         </View>
       ) : (
-        payments.map((p) => (
-          <View key={p.id} style={styles.historyCard}>
+        data.payments.map((p) => (
+          <View key={p.payment_id} style={styles.historyCard}>
             <View>
               <Text style={styles.historyItem}>
                 {p.status === 'credit' ? 'Money In' : 'Money Out'}
@@ -182,25 +201,24 @@ export default function MemberDetailScreen({ route, navigation }: any) {
                 { color: p.status === 'credit' ? '#4caf50' : '#ff9800' },
               ]}
             >
-              {p.status === 'credit' ? '+' : ''}{formatCurrency(parseFloat(p.amount))}
+              {p.status === 'credit' ? '+' : ''}{formatCurrency(Math.abs(Number(p.amount)))}
             </Text>
           </View>
         ))
       )}
 
-      {/* Contribution Modal */}
       <Modal visible={showContribution} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Record Contribution</Text>
             <Text style={styles.modalLabel}>
-              Record {member?.name}'s contribution to the room.
+              Record {data.member?.name}'s contribution to the room.
             </Text>
             <TextInput
               style={styles.input}
               placeholder="Enter amount"
               value={contributionAmount}
-              onChangeText={setContributionAmount}
+              onChangeText={(text) => setContributionAmount(text.replace(/[^0-9.]/g, ''))}
               keyboardType="decimal-pad"
               placeholderTextColor="#999"
             />

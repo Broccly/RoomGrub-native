@@ -1,27 +1,50 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Image,
   Alert,
   Modal,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import useUserRole from '../hooks/useUserRole';
-import { MOCK_USERS } from '../utils/mockData';
+import { api } from '../services/api';
+import { UserSummary } from '../types/api';
 
 export default function MembersScreen({ navigation, route }: any) {
-  const { room_id } = route.params;
+  const room_id = Number(route.params.room_id);
   const { role, loading: roleLoading } = useUserRole();
-  const [members] = useState<any[]>(MOCK_USERS);
-  const [editModal, setEditModal] = useState<{ open: boolean; member: any }>({
+  const [members, setMembers] = useState<UserSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [editModal, setEditModal] = useState<{ open: boolean; member: UserSummary | null }>({
     open: false,
     member: null,
   });
 
-  const handleRoleChange = (newRole: string) => {
+  const loadMembers = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      const result = await api.listMembers(room_id);
+      setMembers(result.members);
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load members');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMembers();
+  }, [room_id]);
+
+  const handleRoleChange = async (newRole: 'Admin' | 'Member') => {
     if (!editModal.member) return;
     const confirmMessage =
       newRole === 'Admin'
@@ -32,17 +55,32 @@ export default function MembersScreen({ navigation, route }: any) {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'OK',
-        onPress: () => {
-          Alert.alert('Mock', `Role change to ${newRole} (mock — not persisted)`);
-          setEditModal({ open: false, member: null });
+        onPress: async () => {
+          try {
+            await api.updateMemberRole(room_id, editModal.member!.user_id, newRole);
+            setEditModal({ open: false, member: null });
+            loadMembers(true);
+          } catch (error) {
+            Alert.alert('Error', error instanceof Error ? error.message : 'Failed to update role');
+          }
         },
       },
     ]);
   };
 
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color="#7b61ff" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <ScrollView>
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadMembers(true)} />}
+      >
         <Text style={styles.heading}>Room Members</Text>
 
         {members.length === 0 ? (
@@ -50,12 +88,12 @@ export default function MembersScreen({ navigation, route }: any) {
         ) : (
           members.map((member) => (
             <TouchableOpacity
-              key={member.id}
+              key={member.user_id}
               style={styles.memberCard}
               onPress={() =>
                 navigation.navigate('MemberDetail', {
                   room_id,
-                  member_id: member.id,
+                  member_id: member.user_id,
                 })
               }
               activeOpacity={0.7}
@@ -101,7 +139,6 @@ export default function MembersScreen({ navigation, route }: any) {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Edit Role Modal */}
       <Modal visible={editModal.open} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -148,6 +185,7 @@ export default function MembersScreen({ navigation, route }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f0f0', padding: 16 },
+  centered: { justifyContent: 'center', alignItems: 'center' },
   heading: {
     fontSize: 24,
     fontWeight: '700',
