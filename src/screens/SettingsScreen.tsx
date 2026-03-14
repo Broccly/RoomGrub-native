@@ -8,12 +8,14 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../utils/supabase';
 
 export default function SettingsScreen({ navigation, route }: any) {
-  const { room_id } = route.params;
+  const room_id = route.params?.room_id;
 
-  const handleSignOut = () => {
-    Alert.alert('Mock', 'Sign out is disabled in preview mode.');
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
 
   return (
@@ -26,7 +28,7 @@ export default function SettingsScreen({ navigation, route }: any) {
           <View style={styles.settingInfo}>
             <Text style={styles.settingLabel}>Push Notifications</Text>
             <Text style={styles.settingHint}>
-              Native push notifications are handled by the OS
+              Native push notifications will be integrated in phase 2
             </Text>
           </View>
         </TouchableOpacity>
@@ -36,7 +38,7 @@ export default function SettingsScreen({ navigation, route }: any) {
         <TouchableOpacity
           style={styles.settingRow}
           onPress={() =>
-            Alert.alert('Mock', 'Activity History not available in preview mode.')
+            Alert.alert('Coming Soon', 'Activity History will be added in a later iteration.')
           }
         >
           <Ionicons name="time-outline" size={22} color="#7b61ff" />

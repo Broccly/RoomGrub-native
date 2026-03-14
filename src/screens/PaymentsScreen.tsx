@@ -1,25 +1,40 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatAmount, formatShortDate, formatMonthYear } from '../utils/format';
-import { MOCK_BALANCE_WITH_USERS } from '../utils/mockData';
+import { api } from '../services/api';
+import { PaymentItem } from '../types/api';
 
 export default function PaymentsScreen({ navigation, route }: any) {
-  const { room_id } = route.params;
+  const room_id = Number(route.params.room_id);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [payments, setPayments] = useState<PaymentItem[]>([]);
 
-  const payments = useMemo(
-    () =>
-      [...MOCK_BALANCE_WITH_USERS].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      ),
-    []
-  );
+  const loadPayments = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      const result = await api.listPayments(room_id, { limit: 100 });
+      setPayments(result.items);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPayments();
+  }, [room_id]);
 
   const groupedPayments = useMemo(() => {
     const groups: Record<string, any> = {};
@@ -41,9 +56,9 @@ export default function PaymentsScreen({ navigation, route }: any) {
       }
       groups[monthKey].payments.push(payment);
 
-      const amount = parseFloat(payment.amount);
+      const amount = Number(payment.amount);
       if (payment.status === 'credit') {
-        groups[monthKey].moneyIn += amount;
+        groups[monthKey].moneyIn += Math.abs(amount);
       } else if (payment.status === 'debit') {
         groups[monthKey].moneyOut += amount;
       }
@@ -63,9 +78,17 @@ export default function PaymentsScreen({ navigation, route }: any) {
     return sorted.reverse();
   }, [payments]);
 
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color="#4caf50" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <ScrollView>
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadPayments(true)} />}>
         {payments.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyTitle}>No payments found</Text>
@@ -93,8 +116,8 @@ export default function PaymentsScreen({ navigation, route }: any) {
                 </View>
               </View>
 
-              {group.payments.map((payment: any, index: number) => (
-                <View key={payment.id}>
+              {group.payments.map((payment: PaymentItem, index: number) => (
+                <View key={payment.payment_id}>
                   <View style={styles.paymentCard}>
                     <View style={styles.paymentIcon}>
                       <View
@@ -130,7 +153,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
                     <View style={styles.paymentInfo}>
                       <View style={styles.paymentRow}>
                         <Text style={styles.paymentUser}>
-                          {payment.Users?.name || payment.user || 'Unknown'}
+                          {payment.user?.name || payment.user?.email || 'Unknown'}
                         </Text>
                         <Text
                           style={[
@@ -144,7 +167,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
                           ]}
                         >
                           {payment.status === 'credit' ? '+' : '-'}
-                          {formatAmount(Math.abs(parseFloat(payment.amount)))}
+                          {formatAmount(Math.abs(Number(payment.amount)))}
                         </Text>
                       </View>
                       <View style={styles.paymentRow}>
@@ -204,6 +227,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
+  center: { justifyContent: 'center', alignItems: 'center' },
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: 48,

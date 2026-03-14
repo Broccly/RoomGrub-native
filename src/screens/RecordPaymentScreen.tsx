@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,31 +7,61 @@ import {
   TouchableOpacity,
   Alert,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
-import { MOCK_USERS } from '../utils/mockData';
+import { api } from '../services/api';
+import { UserSummary } from '../types/api';
 
 export default function RecordPaymentScreen({ route, navigation }: any) {
-  const { room_id } = route.params;
-  const users = MOCK_USERS;
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const room_id = Number(route.params.room_id);
+  const [users, setUsers] = useState<UserSummary[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<UserSummary | null>(null);
   const [amount, setAmount] = useState('');
+  const [status, setStatus] = useState<'credit' | 'debit'>('credit');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = () => {
-    if (!amount || !selectedUser) {
-      Alert.alert('Error', 'Please select a user and enter an amount');
+  useEffect(() => {
+    api
+      .listMembers(room_id)
+      .then((result) => setUsers(result.members))
+      .catch(() => Alert.alert('Error', 'Failed to load members'))
+      .finally(() => setLoadingUsers(false));
+  }, [room_id]);
+
+  const handleSubmit = async () => {
+    const numericAmount = Number(amount);
+
+    if (!numericAmount || !selectedUser || numericAmount <= 0) {
+      Alert.alert('Error', 'Please select a user and enter a valid amount');
       return;
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      Alert.alert('Success', 'Payment recorded! (mock)');
+    try {
+      await api.createPayment(room_id, {
+        user_id: selectedUser.user_id,
+        amount: numericAmount,
+        status,
+      });
+      Alert.alert('Success', 'Payment recorded successfully');
       setAmount('');
       setSelectedUser(null);
-      setIsSubmitting(false);
       navigation.goBack();
-    }, 500);
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to record payment');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  if (loadingUsers) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#4caf50" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -42,17 +72,17 @@ export default function RecordPaymentScreen({ route, navigation }: any) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.userList}>
           {users.map((user) => (
             <TouchableOpacity
-              key={user.id}
+              key={user.user_id}
               style={[
                 styles.userChip,
-                selectedUser?.id === user.id && styles.userChipSelected,
+                selectedUser?.user_id === user.user_id && styles.userChipSelected,
               ]}
               onPress={() => setSelectedUser(user)}
             >
               <Text
                 style={[
                   styles.userChipText,
-                  selectedUser?.id === user.id && styles.userChipTextSelected,
+                  selectedUser?.user_id === user.user_id && styles.userChipTextSelected,
                 ]}
               >
                 {user.name || user.email}
@@ -61,12 +91,28 @@ export default function RecordPaymentScreen({ route, navigation }: any) {
           ))}
         </ScrollView>
 
+        <Text style={styles.label}>Payment Type</Text>
+        <View style={styles.typeRow}>
+          <TouchableOpacity
+            style={[styles.typeButton, status === 'credit' && styles.typeButtonActive]}
+            onPress={() => setStatus('credit')}
+          >
+            <Text style={[styles.typeText, status === 'credit' && styles.typeTextActive]}>Money In</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.typeButton, status === 'debit' && styles.typeButtonActive]}
+            onPress={() => setStatus('debit')}
+          >
+            <Text style={[styles.typeText, status === 'debit' && styles.typeTextActive]}>Money Out</Text>
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.label}>Amount (₹)</Text>
         <TextInput
           style={styles.input}
           placeholder="Enter amount"
           value={amount}
-          onChangeText={setAmount}
+          onChangeText={(text) => setAmount(text.replace(/[^0-9.]/g, ''))}
           keyboardType="decimal-pad"
           placeholderTextColor="#999"
         />
@@ -138,6 +184,31 @@ const styles = StyleSheet.create({
   },
   userChipTextSelected: {
     color: '#2e7d32',
+  },
+  typeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  typeButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  typeButtonActive: {
+    borderColor: '#4caf50',
+    backgroundColor: '#e8f5e9',
+  },
+  typeText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  typeTextActive: {
+    color: '#2e7d32',
+    fontWeight: '600',
   },
   input: {
     borderWidth: 1,

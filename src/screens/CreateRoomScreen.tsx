@@ -8,8 +8,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../utils/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from '../services/api';
 
 const ROOM_STORAGE_KEY = 'roomgrub_user_room';
 
@@ -21,32 +21,13 @@ export default function CreateRoomScreen({ navigation }: any) {
   ];
 
   const handleCreateRoom = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const { data: newRoom, error: roomError } = await supabase
-      .from('Rooms')
-      .insert({ members: 1, admin: session.user.email })
-      .select()
-      .single();
-
-    if (roomError) {
-      Alert.alert('Error', 'Failed to create room');
-      return;
+    try {
+      const result = await api.createRoom();
+      await AsyncStorage.setItem(ROOM_STORAGE_KEY, String(result.room.id));
+      navigation.replace('RoomHome', { room_id: result.room.id });
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create room');
     }
-
-    const { error: userError } = await supabase
-      .from('Users')
-      .update({ room: newRoom.id, role: 'Admin' })
-      .eq('email', session.user.email);
-
-    if (userError) {
-      Alert.alert('Error', 'Failed to update user');
-      return;
-    }
-
-    await AsyncStorage.setItem(ROOM_STORAGE_KEY, String(newRoom.id));
-    navigation.replace('RoomHome', { room_id: newRoom.id });
   };
 
   const handleJoinRequest = () => {
