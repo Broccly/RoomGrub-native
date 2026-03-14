@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import useUserRole from '../hooks/useUserRole';
+import { api } from '../services/api';
 
 const navItems = [
   { label: 'Members', subtext: 'Manage or view room members', icon: 'people' as const, screen: 'Members' },
@@ -21,10 +23,35 @@ const navItems = [
 export default function HomeScreen({ navigation, route }: any) {
   const { session } = useAuth();
   const { role } = useUserRole();
-  const room_id = route.params?.room_id;
+  const room_id = Number(route.params?.room_id);
+  const [loading, setLoading] = useState(false);
 
-  const fullName = session?.user?.user_metadata?.full_name || 'there';
+  useEffect(() => {
+    if (!room_id) {
+      setLoading(true);
+      api
+        .bootstrap()
+        .then((data) => {
+          if (data.membership.room_id) {
+            navigation.replace('RoomHome', { room_id: data.membership.room_id });
+          } else {
+            navigation.replace('CreateRoom');
+          }
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [room_id, navigation]);
+
+  const fullName = session?.user?.user_metadata?.full_name || session?.user?.email || 'there';
   const firstName = fullName.split(' ')[0];
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#7b61ff" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
