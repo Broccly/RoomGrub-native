@@ -1,21 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ScrollView,
   Modal,
-  Image,
+  ActivityIndicator,
 } from 'react-native';
 import useUserRole from '../hooks/useUserRole';
-import { MOCK_USERS } from '../utils/mockData';
+import { api } from '../services/api';
+import { UserSummary } from '../types/api';
 
 export default function AddGroceryScreen({ route }: any) {
-  const { room_id } = route.params;
+  const room_id = Number(route.params.room_id);
   const { role } = useUserRole();
+
+  const [members, setMembers] = useState<UserSummary[]>([]);
+  const [membersLoading, setMembersLoading] = useState(true);
 
   const [grocery, setGrocery] = useState('');
   const [price, setPrice] = useState('');
@@ -23,56 +26,94 @@ export default function AddGroceryScreen({ route }: any) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
-  // Add for friend state
   const [showFriendModal, setShowFriendModal] = useState(false);
-  const roomMembers = MOCK_USERS;
-  const [selectedFriend, setSelectedFriend] = useState<any>(null);
+  const [selectedFriend, setSelectedFriend] = useState<UserSummary | null>(null);
   const [friendGrocery, setFriendGrocery] = useState('');
   const [friendPrice, setFriendPrice] = useState('');
   const [friendDate, setFriendDate] = useState('');
   const [friendLoading, setFriendLoading] = useState(false);
   const [friendMsg, setFriendMsg] = useState('');
 
-  const handleAdd = () => {
+  useEffect(() => {
+    api
+      .listMembers(room_id)
+      .then((data) => setMembers(data.members))
+      .finally(() => setMembersLoading(false));
+  }, [room_id]);
+
+  const handleAdd = async () => {
     setMsg('');
-    if (!grocery || !price) {
-      setMsg('Please fill all fields.');
+    const numericPrice = Number(price);
+
+    if (!grocery || !price || Number.isNaN(numericPrice) || numericPrice <= 0) {
+      setMsg('Please fill valid grocery and price.');
       return;
     }
+
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const bootstrap = await api.bootstrap();
+      await api.createExpense(room_id, {
+        user_id: bootstrap.user.id,
+        material: grocery.trim(),
+        money: numericPrice,
+        created_at: date || undefined,
+      });
       setMsg('Grocery added!');
       setGrocery('');
       setPrice('');
       setDate('');
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : 'Failed to add grocery');
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
-  const handleAddForFriend = () => {
+  const handleAddForFriend = async () => {
     setFriendMsg('');
+    const numericPrice = Number(friendPrice);
+
     if (!selectedFriend) {
       setFriendMsg('Please select a friend.');
       return;
     }
-    if (!friendGrocery || !friendPrice) {
-      setFriendMsg('Please fill all fields.');
+    if (!friendGrocery || !friendPrice || Number.isNaN(numericPrice) || numericPrice <= 0) {
+      setFriendMsg('Please fill valid grocery and price.');
       return;
     }
+
     setFriendLoading(true);
-    setTimeout(() => {
+    try {
+      await api.createExpense(room_id, {
+        user_id: selectedFriend.user_id,
+        material: friendGrocery.trim(),
+        money: numericPrice,
+        created_at: friendDate || undefined,
+      });
       setFriendMsg(`Added for ${selectedFriend.name || selectedFriend.email}`);
       setSelectedFriend(null);
       setFriendGrocery('');
       setFriendPrice('');
       setFriendDate('');
-      setFriendLoading(false);
       setTimeout(() => {
         setShowFriendModal(false);
         setFriendMsg('');
-      }, 2000);
-    }, 500);
+      }, 1000);
+    } catch (error) {
+      setFriendMsg(error instanceof Error ? error.message : 'Failed to add grocery');
+    } finally {
+      setFriendLoading(false);
+    }
   };
+
+  if (membersLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -144,7 +185,6 @@ export default function AddGroceryScreen({ route }: any) {
         )}
       </View>
 
-      {/* Friend Modal */}
       <Modal visible={showFriendModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -157,12 +197,12 @@ export default function AddGroceryScreen({ route }: any) {
 
             <Text style={styles.label}>Select Friend</Text>
             <ScrollView horizontal style={styles.friendSelector}>
-              {roomMembers.map((member) => (
+              {members.map((member) => (
                 <TouchableOpacity
-                  key={member.id}
+                  key={member.user_id}
                   style={[
                     styles.friendChip,
-                    selectedFriend?.id === member.id && styles.friendChipSelected,
+                    selectedFriend?.user_id === member.user_id && styles.friendChipSelected,
                   ]}
                   onPress={() => setSelectedFriend(member)}
                 >

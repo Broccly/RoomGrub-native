@@ -1,27 +1,56 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { formatDate } from '../utils/format';
-import { MOCK_BALANCE } from '../utils/mockData';
+import { api } from '../services/api';
+import { PaymentItem } from '../types/api';
 
 export default function BalanceScreen({ route }: any) {
-  const { room_id } = route.params;
+  const room_id = Number(route.params.room_id);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [payments, setPayments] = useState<PaymentItem[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+
+  const loadData = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      const [bootstrap, paymentData] = await Promise.all([
+        api.bootstrap(),
+        api.listPayments(room_id, { limit: 200 }),
+      ]);
+
+      setCurrentUserId(bootstrap.user.id);
+      setPayments(paymentData.items.filter((item) => item.user_id === bootstrap.user.id));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [room_id]);
 
   const balanceData = useMemo(() => {
-    const transactions = [...MOCK_BALANCE].sort(
+    const transactions = [...payments].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
 
     const totalCredit = transactions.reduce(
-      (sum, t) => (t.status === 'credit' ? sum + parseFloat(t.amount) : sum),
+      (sum, t) => (t.status === 'credit' ? sum + Number(t.amount) : sum),
       0
     );
     const totalDebit = transactions.reduce(
-      (sum, t) => (t.status === 'debit' ? sum + parseFloat(t.amount) : sum),
+      (sum, t) => (t.status === 'debit' ? sum + Number(t.amount) : sum),
       0
     );
 
@@ -31,15 +60,22 @@ export default function BalanceScreen({ route }: any) {
       currentBalance: totalCredit + totalDebit,
       transactions,
     };
-  }, []);
+  }, [payments]);
 
   const { totalCredit, totalDebit, currentBalance, transactions } = balanceData;
   const debitAbs = Math.abs(totalDebit);
   const progressRatio = totalCredit > 0 ? debitAbs / totalCredit : 0;
 
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#7b61ff" />
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container}>
-      {/* Balance Card */}
+    <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}>
       <View style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>Your Balance</Text>
         <Text style={styles.balanceAmount}>
@@ -56,7 +92,6 @@ export default function BalanceScreen({ route }: any) {
           </Text>
         </View>
 
-        {/* Progress bar */}
         <View style={styles.progressBar}>
           <View
             style={[
@@ -72,7 +107,6 @@ export default function BalanceScreen({ route }: any) {
         </View>
       </View>
 
-      {/* Transactions */}
       <Text style={styles.sectionTitle}>Recent Transactions</Text>
       {transactions.length === 0 ? (
         <View style={styles.emptyCard}>
@@ -80,7 +114,7 @@ export default function BalanceScreen({ route }: any) {
         </View>
       ) : (
         transactions.map((txn, idx) => (
-          <View key={txn.id || idx} style={styles.txnCard}>
+          <View key={txn.payment_id || idx} style={styles.txnCard}>
             <View
               style={[
                 styles.txnIcon,
@@ -101,7 +135,7 @@ export default function BalanceScreen({ route }: any) {
               </Text>
             </View>
             <View style={styles.txnInfo}>
-              <Text style={styles.txnUser}>{txn.user || 'Unknown User'}</Text>
+              <Text style={styles.txnUser}>{txn.user?.name || txn.user?.email || 'Unknown User'}</Text>
               <Text style={styles.txnDate}>{formatDate(txn.created_at)}</Text>
             </View>
             <Text
@@ -113,8 +147,8 @@ export default function BalanceScreen({ route }: any) {
                 },
               ]}
             >
-              {txn.status === 'credit' ? '₹+' : '₹'}
-              {parseFloat(txn.amount).toLocaleString('en-IN')}
+              {txn.status === 'credit' ? '₹+' : '₹-'}
+              {Math.abs(Number(txn.amount)).toLocaleString('en-IN')}
             </Text>
           </View>
         ))

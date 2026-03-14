@@ -1,134 +1,105 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import useUserRole from '../hooks/useUserRole';
 import { formatAmount } from '../utils/format';
-import { MOCK_USERS, MOCK_EXPENSES, MOCK_BALANCE } from '../utils/mockData';
+import { api } from '../services/api';
+import { SplitsSummary } from '../types/api';
 
 export default function SplitsScreen({ route }: any) {
-  const { room_id } = route.params;
+  const room_id = Number(route.params.room_id);
   const { role } = useUserRole();
   const [isSettling, setIsSettling] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [summary, setSummary] = useState<SplitsSummary | null>(null);
 
-  const members = MOCK_USERS;
-  const expenses = MOCK_EXPENSES;
-  const payments = MOCK_BALANCE;
+  const loadSummary = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
 
-  const splitCalculation = useMemo(() => {
-    const memberExpenses: Record<string, number> = {};
-    const memberSettlements: Record<string, number> = {};
+    try {
+      const data = await api.getSplitsSummary(room_id);
+      setSummary(data);
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load splits');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-    members.forEach((m) => {
-      memberExpenses[m.email] = 0;
-      memberSettlements[m.email] = 0;
-    });
-
-    expenses.forEach((e) => {
-      if (memberExpenses.hasOwnProperty(e.user)) {
-        memberExpenses[e.user] += parseFloat(e.money || '0');
-      }
-    });
-
-    payments.forEach((p) => {
-      if (memberSettlements.hasOwnProperty(p.user) && p.status === 'debit') {
-        memberSettlements[p.user] += parseFloat(p.amount || '0');
-      }
-    });
-
-    const memberPending: Record<string, number> = {};
-    members.forEach((m) => {
-      memberPending[m.email] = memberExpenses[m.email] + memberSettlements[m.email];
-    });
-
-    const totalPendingExpenses = Object.values(memberPending).reduce(
-      (sum, amount) => sum + (amount > 0 ? amount : 0),
-      0
-    );
-
-    const numberOfMembers = members.length;
-    const equalShare = numberOfMembers > 0 ? totalPendingExpenses / numberOfMembers : 0;
-
-    const memberBalances = members.map((member) => {
-      const pendingAmount = memberPending[member.email] || 0;
-      const shouldPay = equalShare;
-      const balance = pendingAmount - shouldPay;
-
-      return {
-        member,
-        spent: memberExpenses[member.email] || 0,
-        pendingAmount,
-        shouldPay,
-        balance,
-        status: balance > 0 ? 'credit' : balance < 0 ? 'debit' : 'even',
-      };
-    });
-
-    const pendingSettlements = memberBalances.filter(
-      (mb) => Math.abs(mb.balance) > 0.01
-    );
-
-    return {
-      totalPendingExpenses,
-      equalShare,
-      memberBalances,
-      numberOfMembers,
-      pendingSettlements,
-    };
-  }, [expenses, payments, members]);
+  useEffect(() => {
+    loadSummary();
+  }, [room_id]);
 
   const handleSettleAll = () => {
+    if (!summary) return;
+
     Alert.alert(
       'Settle All',
-      `Settle all ${splitCalculation.pendingSettlements.length} pending balances?`,
+      `Settle all ${summary.pending_settlements_count} pending balances?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Settle',
-          onPress: () => {
+          onPress: async () => {
             setIsSettling(true);
-            setTimeout(() => {
-              Alert.alert('Success', 'All balances settled! (mock)');
+            try {
+              const result = await api.settleAll(room_id);
+              Alert.alert('Success', `${result.settled_count} balance entries settled.`);
+              await loadSummary(true);
+            } catch (error) {
+              Alert.alert('Error', error instanceof Error ? error.message : 'Failed to settle balances');
+            } finally {
               setIsSettling(false);
-            }, 500);
+            }
           },
         },
       ]
     );
   };
 
+  if (loading || !summary) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#4caf50" />
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadSummary(true)} />}>
       <Text style={styles.heading}>Splits</Text>
       <Text style={styles.subheading}>
         Split expenses and settle all balances
       </Text>
 
-      {/* Summary Cards */}
       <View style={styles.summaryRow}>
         <View style={[styles.summaryCard, { backgroundColor: '#ede9fe' }]}>
           <Text style={styles.summaryLabel}>Total Pending</Text>
           <Text style={styles.summaryValue}>
-            {formatAmount(splitCalculation.totalPendingExpenses)}
+            {formatAmount(summary.total_pending_expenses)}
           </Text>
         </View>
         <View style={[styles.summaryCard, { backgroundColor: '#dcfce7' }]}>
           <Text style={styles.summaryLabel}>Per Person</Text>
           <Text style={styles.summaryValue}>
-            {formatAmount(splitCalculation.equalShare)}
+            {formatAmount(summary.equal_share)}
           </Text>
         </View>
       </View>
 
-      {/* All Settled or Member Balances */}
-      {splitCalculation.pendingSettlements.length === 0 ? (
+      {summary.pending_settlements_count === 0 ? (
         <View style={styles.allClearContainer}>
           <Ionicons name="checkmark-circle" size={80} color="#4caf50" />
           <Text style={styles.allClearTitle}>All Clear!</Text>
@@ -138,7 +109,7 @@ export default function SplitsScreen({ route }: any) {
         </View>
       ) : (
         <>
-          {splitCalculation.memberBalances.map((mb) => {
+          {summary.member_balances.map((mb) => {
             const cardColor =
               mb.status === 'credit'
                 ? '#dcfce7'
@@ -148,7 +119,7 @@ export default function SplitsScreen({ route }: any) {
 
             return (
               <View
-                key={mb.member.email}
+                key={mb.user_id}
                 style={[styles.memberCard, { backgroundColor: cardColor }]}
               >
                 <View style={styles.memberHeader}>
@@ -165,7 +136,7 @@ export default function SplitsScreen({ route }: any) {
                       {mb.member.name || mb.member.email}
                     </Text>
                     <Text style={styles.pendingText}>
-                      Pending: {formatAmount(mb.pendingAmount)}
+                      Pending: {formatAmount(mb.pending_amount)}
                     </Text>
                   </View>
 
@@ -198,7 +169,6 @@ export default function SplitsScreen({ route }: any) {
             );
           })}
 
-          {/* Settle All Button */}
           {role === 'Admin' && (
             <TouchableOpacity
               style={[styles.settleButton, isSettling && { opacity: 0.6 }]}
@@ -208,7 +178,7 @@ export default function SplitsScreen({ route }: any) {
               <Text style={styles.settleButtonText}>
                 {isSettling
                   ? 'Settling...'
-                  : `Settle All (${splitCalculation.pendingSettlements.length})`}
+                  : `Settle All (${summary.pending_settlements_count})`}
               </Text>
             </TouchableOpacity>
           )}

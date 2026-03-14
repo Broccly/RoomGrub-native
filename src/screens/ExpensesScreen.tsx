@@ -1,29 +1,48 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TextInput,
-  Image,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatAmount, formatShortDate, formatMonthYear } from '../utils/format';
-import { MOCK_EXPENSES_WITH_USERS } from '../utils/mockData';
+import { api } from '../services/api';
+import { ExpenseItem } from '../types/api';
 
 export default function ExpensesScreen({ route }: any) {
-  const { room_id } = route.params;
+  const room_id = Number(route.params.room_id);
   const [filter, setFilter] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
 
-  const expenses = useMemo(() => {
-    if (!filter) return MOCK_EXPENSES_WITH_USERS;
-    return MOCK_EXPENSES_WITH_USERS.filter((e) =>
-      e.material.toLowerCase().includes(filter.toLowerCase())
-    );
-  }, [filter]);
+  const loadExpenses = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      const data = await api.listExpenses(room_id, { search: filter || undefined, limit: 100 });
+      setExpenses(data.items);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      loadExpenses();
+    }, 250);
+
+    return () => clearTimeout(timeout);
+  }, [room_id, filter]);
 
   const groupedExpenses = useMemo(() => {
-    const groups: Record<string, { monthKey: string; monthName: string; expenses: any[]; total: number }> = {};
+    const groups: Record<string, { monthKey: string; monthName: string; expenses: ExpenseItem[]; total: number }> = {};
 
     expenses.forEach((expense) => {
       const date = new Date(expense.created_at);
@@ -34,7 +53,7 @@ export default function ExpensesScreen({ route }: any) {
         groups[monthKey] = { monthKey, monthName, expenses: [], total: 0 };
       }
       groups[monthKey].expenses.push(expense);
-      groups[monthKey].total += parseFloat(expense.money);
+      groups[monthKey].total += Number(expense.money);
     });
 
     return Object.values(groups).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
@@ -45,7 +64,7 @@ export default function ExpensesScreen({ route }: any) {
     groupedExpenses.forEach((group) => {
       items.push({ type: 'header', monthName: group.monthName, total: group.total, key: `h-${group.monthKey}` });
       group.expenses.forEach((e) => {
-        items.push({ type: 'expense', ...e, key: `e-${e.id}` });
+        items.push({ type: 'expense', ...e, key: `e-${e.expense_id}` });
       });
     });
     return items;
@@ -71,7 +90,7 @@ export default function ExpensesScreen({ route }: any) {
         <View style={styles.expenseInfo}>
           <View style={styles.expenseRow}>
             <Text style={styles.expenseUser}>
-              {item.Users?.name || item.user || 'Unknown'}
+              {item.user?.name || item.user?.email || 'Unknown'}
             </Text>
             <Text style={styles.expenseAmount}>{formatAmount(item.money)}</Text>
           </View>
@@ -96,24 +115,31 @@ export default function ExpensesScreen({ route }: any) {
         placeholderTextColor="#999"
       />
 
-      <FlatList
-        data={flatData}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.key}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No expenses found</Text>
-            <Text style={styles.emptyText}>
-              Try adjusting your filters or add a new expense
-            </Text>
-          </View>
-        }
-        ListFooterComponent={
-          expenses.length > 0 ? (
-            <Text style={styles.endText}>No more expenses</Text>
-          ) : null
-        }
-      />
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#7b61ff" />
+        </View>
+      ) : (
+        <FlatList
+          data={flatData}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.key}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadExpenses(true)} />}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyTitle}>No expenses found</Text>
+              <Text style={styles.emptyText}>
+                Try adjusting your filters or add a new expense
+              </Text>
+            </View>
+          }
+          ListFooterComponent={
+            expenses.length > 0 ? (
+              <Text style={styles.endText}>No more expenses</Text>
+            ) : null
+          }
+        />
+      )}
     </View>
   );
 }
@@ -131,6 +157,7 @@ const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
     color: '#333',
   },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   monthHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
