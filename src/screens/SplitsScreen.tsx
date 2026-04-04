@@ -127,7 +127,7 @@ export default function SplitsScreen({ route }: any) {
             setIsSettling(true);
             try {
               const result = await api.settleAll(room_id);
-              Alert.alert('Success', `${result.settled_count} balance entries settled.`);
+              Alert.alert('Success', `${result.expenses_settled} expense${result.expenses_settled !== 1 ? 's' : ''} settled.`);
               await loadSummary(true);
             } catch (error) {
               Alert.alert('Error', error instanceof Error ? error.message : 'Failed to settle balances');
