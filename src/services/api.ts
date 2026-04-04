@@ -108,7 +108,10 @@ export const api = {
     callApi<SplitsSummary>(`/v1/rooms/${roomId}/splits.summary`, 'GET', { query }),
 
   settleAll: (roomId: number) =>
-    callApi<{ settled_count: number }>(`/v1/rooms/${roomId}/splits.settleAll`, 'POST'),
+    callApi<{ settled_count: number; expenses_settled: number }>(
+      `/v1/rooms/${roomId}/splits.settleAll`,
+      'POST',
+    ),
 
   getMemberDetail: (roomId: number, userId: number) =>
     callApi<MemberDetail>(`/v1/rooms/${roomId}/members/${userId}/detail`, 'GET'),
