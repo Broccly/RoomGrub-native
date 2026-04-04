@@ -39,6 +39,8 @@ export type ExpenseItem = {
   material: string;
   money: number;
   created_at: string;
+  settled: boolean;
+  settled_at: string | null;
 };
 
 export type PaymentItem = {
@@ -75,6 +77,7 @@ export type MemberDetail = {
     material: string;
     money: number;
     created_at: string;
+    settled: boolean;
   }>;
   payments: Array<{
     payment_id: number;
@@ -84,7 +87,6 @@ export type MemberDetail = {
   }>;
   summary: {
     total_purchases: number;
-    total_received: number;
     total_contributed: number;
     pending_amount: number;
   };
