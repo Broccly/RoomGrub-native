@@ -9,6 +9,8 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import useUserRole from '../hooks/useUserRole';
 import { api } from '../services/api';
 import { UserSummary } from '../types/api';
@@ -22,7 +24,8 @@ export default function AddGroceryScreen({ route }: any) {
 
   const [grocery, setGrocery] = useState('');
   const [price, setPrice] = useState('');
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
@@ -30,7 +33,8 @@ export default function AddGroceryScreen({ route }: any) {
   const [selectedFriend, setSelectedFriend] = useState<UserSummary | null>(null);
   const [friendGrocery, setFriendGrocery] = useState('');
   const [friendPrice, setFriendPrice] = useState('');
-  const [friendDate, setFriendDate] = useState('');
+  const [friendDate, setFriendDate] = useState<Date | null>(null);
+  const [showFriendDatePicker, setShowFriendDatePicker] = useState(false);
   const [friendLoading, setFriendLoading] = useState(false);
   const [friendMsg, setFriendMsg] = useState('');
 
@@ -57,12 +61,12 @@ export default function AddGroceryScreen({ route }: any) {
         user_id: bootstrap.user.id,
         material: grocery.trim(),
         money: numericPrice,
-        created_at: date || undefined,
+        created_at: date ? date.toISOString().split('T')[0] : undefined,
       });
       setMsg('Grocery added!');
       setGrocery('');
       setPrice('');
-      setDate('');
+      setDate(null);
     } catch (error) {
       setMsg(error instanceof Error ? error.message : 'Failed to add grocery');
     } finally {
@@ -89,13 +93,13 @@ export default function AddGroceryScreen({ route }: any) {
         user_id: selectedFriend.user_id,
         material: friendGrocery.trim(),
         money: numericPrice,
-        created_at: friendDate || undefined,
+        created_at: friendDate ? friendDate.toISOString().split('T')[0] : undefined,
       });
       setFriendMsg(`Added for ${selectedFriend.name || selectedFriend.email}`);
       setSelectedFriend(null);
       setFriendGrocery('');
       setFriendPrice('');
-      setFriendDate('');
+      setFriendDate(null);
       setTimeout(() => {
         setShowFriendModal(false);
         setFriendMsg('');
@@ -110,7 +114,7 @@ export default function AddGroceryScreen({ route }: any) {
   if (membersLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+        <ActivityIndicator size="large" color="#9333ea" />
       </View>
     );
   }
@@ -137,14 +141,26 @@ export default function AddGroceryScreen({ route }: any) {
           placeholderTextColor="#999"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Date (YYYY-MM-DD, optional)"
-          value={date}
-          onChangeText={setDate}
-          placeholderTextColor="#999"
+        <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)}>
+          <Ionicons name="calendar-outline" size={18} color={date ? '#9333ea' : '#999'} />
+          <Text style={[styles.dateBtnText, date && styles.dateBtnTextActive]}>
+            {date ? date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Select Date (optional)'}
+          </Text>
+          {date && (
+            <TouchableOpacity onPress={() => setDate(null)}>
+              <Ionicons name="close-circle" size={18} color="#9333ea" />
+            </TouchableOpacity>
+          )}
+        </TouchableOpacity>
+
+        <DateTimePickerModal
+          isVisible={showDatePicker}
+          mode="date"
+          date={date ?? new Date()}
+          maximumDate={new Date()}
+          onConfirm={(d) => { setDate(d); setShowDatePicker(false); }}
+          onCancel={() => setShowDatePicker(false)}
         />
-        <Text style={styles.helperText}>Leave empty to use current date</Text>
 
         <TouchableOpacity
           style={[styles.addButton, loading && styles.addButtonDisabled]}
@@ -231,12 +247,25 @@ export default function AddGroceryScreen({ route }: any) {
               keyboardType="decimal-pad"
               placeholderTextColor="#999"
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Date (YYYY-MM-DD, optional)"
-              value={friendDate}
-              onChangeText={setFriendDate}
-              placeholderTextColor="#999"
+            <TouchableOpacity style={styles.dateBtn} onPress={() => setShowFriendDatePicker(true)}>
+              <Ionicons name="calendar-outline" size={18} color={friendDate ? '#9333ea' : '#999'} />
+              <Text style={[styles.dateBtnText, friendDate && styles.dateBtnTextActive]}>
+                {friendDate ? friendDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Select Date (optional)'}
+              </Text>
+              {friendDate && (
+                <TouchableOpacity onPress={() => setFriendDate(null)}>
+                  <Ionicons name="close-circle" size={18} color="#9333ea" />
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+
+            <DateTimePickerModal
+              isVisible={showFriendDatePicker}
+              mode="date"
+              date={friendDate ?? new Date()}
+              maximumDate={new Date()}
+              onConfirm={(d) => { setFriendDate(d); setShowFriendDatePicker(false); }}
+              onCancel={() => setShowFriendDatePicker(false)}
             />
 
             <TouchableOpacity
@@ -277,7 +306,7 @@ export default function AddGroceryScreen({ route }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#eef2ff',
+    backgroundColor: '#faf5ff',
     padding: 16,
   },
   card: {
@@ -295,7 +324,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '700',
     textAlign: 'center',
-    color: '#3b82f6',
+    color: '#9333ea',
     marginBottom: 24,
   },
   input: {
@@ -309,15 +338,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     color: '#333',
   },
-  helperText: {
-    fontSize: 13,
-    color: '#888',
-    marginTop: -12,
+  dateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     marginBottom: 16,
-    paddingLeft: 4,
+    backgroundColor: '#fff',
   },
+  dateBtnText: { flex: 1, fontSize: 16, color: '#999' },
+  dateBtnTextActive: { color: '#9333ea', fontWeight: '500' },
   addButton: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#9333ea',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -356,7 +392,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   addForFriend: {
-    color: '#3b82f6',
+    color: '#9333ea',
     textDecorationLine: 'underline',
     marginTop: 20,
     fontSize: 15,
@@ -411,8 +447,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   friendChipSelected: {
-    borderColor: '#3b82f6',
-    backgroundColor: '#eff6ff',
+    borderColor: '#9333ea',
+    backgroundColor: '#f3e8ff',
   },
   friendAvatarFallback: {
     width: 28,
