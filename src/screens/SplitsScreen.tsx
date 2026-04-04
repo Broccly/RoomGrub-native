@@ -72,7 +72,7 @@ export default function SplitsScreen({ route }: any) {
   if (loading || !summary) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#4caf50" />
+        <ActivityIndicator size="large" color="#9333ea" />
       </View>
     );
   }
@@ -191,7 +191,7 @@ export default function SplitsScreen({ route }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f0f0', padding: 16 },
+  container: { flex: 1, backgroundColor: '#faf5ff', padding: 16 },
   heading: { fontSize: 24, fontWeight: '700', color: '#333', marginBottom: 4 },
   subheading: { fontSize: 14, color: '#888', marginBottom: 20 },
   summaryRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   balanceContainer: { alignItems: 'flex-end' },
   balanceAmount: { fontSize: 20, fontWeight: '700', color: '#333', marginTop: 4 },
   settleButton: {
-    backgroundColor: '#4caf50',
+    backgroundColor: '#7e22ce',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

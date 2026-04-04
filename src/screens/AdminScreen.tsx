@@ -113,7 +113,7 @@ export default function AdminScreen({ route }: any) {
   if (loading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#7b61ff" />
+        <ActivityIndicator size="large" color="#9333ea" />
       </View>
     );
   }
@@ -133,7 +133,7 @@ export default function AdminScreen({ route }: any) {
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Total Paid Out</Text>
-            <Text style={[styles.statValue, { color: '#7b61ff' }]}>
+            <Text style={[styles.statValue, { color: '#9333ea' }]}>
               {formatCurrency(totalRoomStats.totalPaid)}
             </Text>
           </View>
@@ -205,7 +205,7 @@ export default function AdminScreen({ route }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f0f0', padding: 16 },
+  container: { flex: 1, backgroundColor: '#faf5ff', padding: 16 },
   heading: { fontSize: 24, fontWeight: '700', color: '#333', marginBottom: 16 },
   overviewCard: {
     backgroundColor: '#fff',

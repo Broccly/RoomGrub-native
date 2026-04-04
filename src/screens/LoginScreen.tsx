@@ -139,7 +139,7 @@ function GoogleIcon() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#faf5ff',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#BF377E',
+    color: '#9333ea',
     marginBottom: 8,
   },
   subtitle: {

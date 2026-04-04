@@ -24,7 +24,7 @@ export default function SettingsScreen({ navigation, route }: any) {
 
       <View style={styles.card}>
         <TouchableOpacity style={styles.settingRow}>
-          <Ionicons name="notifications-outline" size={22} color="#7b61ff" />
+          <Ionicons name="notifications-outline" size={22} color="#9333ea" />
           <View style={styles.settingInfo}>
             <Text style={styles.settingLabel}>Push Notifications</Text>
             <Text style={styles.settingHint}>
@@ -41,7 +41,7 @@ export default function SettingsScreen({ navigation, route }: any) {
             Alert.alert('Coming Soon', 'Activity History will be added in a later iteration.')
           }
         >
-          <Ionicons name="time-outline" size={22} color="#7b61ff" />
+          <Ionicons name="time-outline" size={22} color="#9333ea" />
           <View style={styles.settingInfo}>
             <Text style={styles.settingLabel}>Activity History</Text>
             <Text style={styles.settingHint}>View all room activities</Text>
@@ -59,7 +59,7 @@ export default function SettingsScreen({ navigation, route }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa', padding: 16 },
+  container: { flex: 1, backgroundColor: '#faf5ff', padding: 16 },
   heading: {
     fontSize: 24,
     fontWeight: '700',

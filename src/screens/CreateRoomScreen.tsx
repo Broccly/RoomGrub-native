@@ -72,7 +72,7 @@ export default function CreateRoomScreen({ navigation }: any) {
 
         <View style={styles.featuresCard}>
           <View style={styles.featuresHeader}>
-            <Ionicons name="people" size={16} color="#7b61ff" />
+            <Ionicons name="people" size={16} color="#9333ea" />
             <Text style={styles.featuresTitle}>What you can do:</Text>
           </View>
           {features.map((feature, index) => (
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#faf5ff',
     padding: 16,
   },
   content: {
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 24,
     elevation: 4,
-    backgroundColor: '#7b61ff',
+    backgroundColor: '#9333ea',
   },
   heading: {
     fontSize: 24,
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#7b61ff',
+    backgroundColor: '#9333ea',
     paddingVertical: 14,
     borderRadius: 10,
     gap: 8,

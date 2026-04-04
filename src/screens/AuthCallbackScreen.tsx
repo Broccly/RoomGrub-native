@@ -28,7 +28,7 @@ export default function AuthCallbackScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#7b61ff" />
+      <ActivityIndicator size="large" color="#9333ea" />
       <Text style={styles.text}>Logging in...</Text>
     </View>
   );
@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#faf5ff',
   },
   text: {
     marginTop: 16,

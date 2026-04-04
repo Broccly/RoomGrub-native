@@ -69,7 +69,7 @@ export default function BalanceScreen({ route }: any) {
   if (loading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#7b61ff" />
+        <ActivityIndicator size="large" color="#9333ea" />
       </View>
     );
   }
@@ -159,7 +159,7 @@ export default function BalanceScreen({ route }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f0f0', padding: 16 },
+  container: { flex: 1, backgroundColor: '#faf5ff', padding: 16 },
   balanceCard: {
     backgroundColor: '#f5f3ff',
     borderRadius: 14,

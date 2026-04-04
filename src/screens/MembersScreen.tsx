@@ -71,7 +71,7 @@ export default function MembersScreen({ navigation, route }: any) {
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#7b61ff" />
+        <ActivityIndicator size="large" color="#9333ea" />
       </View>
     );
   }
@@ -184,7 +184,7 @@ export default function MembersScreen({ navigation, route }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f0f0', padding: 16 },
+  container: { flex: 1, backgroundColor: '#faf5ff', padding: 16 },
   centered: { justifyContent: 'center', alignItems: 'center' },
   heading: {
     fontSize: 24,
@@ -210,12 +210,14 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#ddd',
+    backgroundColor: '#ede9fe',
+    borderWidth: 2,
+    borderColor: '#c4b5fd',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  avatarText: { fontSize: 20, fontWeight: '700', color: '#555' },
+  avatarText: { fontSize: 20, fontWeight: '700', color: '#9333ea' },
   memberInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
   memberName: { fontSize: 16, fontWeight: '600', color: '#333' },
@@ -225,9 +227,9 @@ const styles = StyleSheet.create({
   roleBadgeText: { fontSize: 11, fontWeight: '500', color: '#555' },
   memberEmail: { fontSize: 13, color: '#888' },
   editBtn: { padding: 8 },
-  editBtnText: { fontSize: 13, color: '#7b61ff', fontWeight: '600' },
+  editBtnText: { fontSize: 13, color: '#9333ea', fontWeight: '600' },
   addButton: {
-    backgroundColor: '#7b61ff',
+    backgroundColor: '#9333ea',
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
