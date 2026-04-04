@@ -198,6 +198,7 @@ export default function ExpensesScreen({ route }: any) {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.memberChipsScroll}
           contentContainerStyle={styles.memberChips}
         >
           <TouchableOpacity
@@ -365,11 +366,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filterBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
+  memberChipsScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   memberChips: {
     paddingHorizontal: 12,
-    paddingBottom: 12,
+    paddingVertical: 12,
     gap: 8,
     flexDirection: 'row',
+    alignItems: 'center',
   },
   chip: {
     paddingHorizontal: 18,
@@ -383,7 +389,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#9333ea',
     borderColor: '#9333ea',
   },
-  chipText: { fontSize: 14, fontWeight: '500', color: '#666' },
+  chipText: { fontSize: 14, fontWeight: '500', color: '#666', lineHeight: 18 },
   chipTextActive: { color: '#fff' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   monthHeader: {

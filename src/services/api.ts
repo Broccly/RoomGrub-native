@@ -104,8 +104,8 @@ export const api = {
     payload: { user_id: number; amount: number; status: 'credit' | 'debit'; created_at?: string },
   ) => callApi<PaymentItem>(`/v1/rooms/${roomId}/payments.create`, 'POST', { payload }),
 
-  getSplitsSummary: (roomId: number) =>
-    callApi<SplitsSummary>(`/v1/rooms/${roomId}/splits.summary`, 'GET'),
+  getSplitsSummary: (roomId: number, query?: Record<string, string | undefined>) =>
+    callApi<SplitsSummary>(`/v1/rooms/${roomId}/splits.summary`, 'GET', { query }),
 
   settleAll: (roomId: number) =>
     callApi<{ settled_count: number }>(`/v1/rooms/${roomId}/splits.settleAll`, 'POST'),

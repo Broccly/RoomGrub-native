@@ -626,7 +626,11 @@ async function handlePaymentsCreate(req: Request, roomId: number, payload: any) 
   });
 }
 
-async function computeSplitSummary(service: ReturnType<typeof createServiceClient>, roomId: number) {
+async function computeSplitSummary(
+  service: ReturnType<typeof createServiceClient>,
+  roomId: number,
+  filters?: { dateFrom?: string | null; dateTo?: string | null; userIds?: number[] | null },
+) {
   const roomUsers = await resolveRoomUsers(service, roomId);
 
   const memberExpenses = new Map<number, number>();
@@ -637,11 +641,22 @@ async function computeSplitSummary(service: ReturnType<typeof createServiceClien
     memberSettlements.set(u.id, 0);
   });
 
+  let expensesQuery = service
+    .from('Spendings')
+    .select('user, money')
+    .eq('room', roomId);
+
+  if (filters?.dateFrom) expensesQuery = expensesQuery.gte('created_at', filters.dateFrom);
+  if (filters?.dateTo) expensesQuery = expensesQuery.lte('created_at', `${filters.dateTo}T23:59:59`);
+  if (filters?.userIds && filters.userIds.length > 0) {
+    const emails = filters.userIds
+      .map((id) => roomUsers.byId.get(id)?.email)
+      .filter(Boolean) as string[];
+    if (emails.length > 0) expensesQuery = expensesQuery.in('user', emails);
+  }
+
   const [expensesResult, paymentsResult] = await Promise.all([
-    service
-      .from('Spendings')
-      .select('user, money')
-      .eq('room', roomId),
+    expensesQuery,
     service
       .from('balance')
       .select('user, amount, status')
@@ -697,16 +712,21 @@ async function computeSplitSummary(service: ReturnType<typeof createServiceClien
 
   const pendingSettlements = memberBalances.filter((mb) => Math.abs(mb.balance) > 0.01);
 
+  const visibleBalances =
+    filters?.userIds && filters.userIds.length > 0
+      ? memberBalances.filter((mb: { user_id: number }) => filters.userIds!.includes(mb.user_id))
+      : memberBalances;
+
   return {
     total_pending_expenses: totalPendingExpenses,
     equal_share: equalShare,
-    member_balances: memberBalances,
+    member_balances: visibleBalances,
     pending_settlements_count: pendingSettlements.length,
     pending_settlements: pendingSettlements,
   };
 }
 
-async function handleSplitsSummary(req: Request, roomId: number) {
+async function handleSplitsSummary(req: Request, roomId: number, query: URLSearchParams) {
   const { user, error } = await getAuthenticatedUser(req);
   if (error || !user) return jsonResponse(401, { error: 'Unauthorized' });
 
@@ -714,7 +734,12 @@ async function handleSplitsSummary(req: Request, roomId: number) {
   const membershipCheck = await requireRoomMembership(service, user.email!, roomId);
   if (membershipCheck.error) return jsonResponse(403, { error: membershipCheck.error });
 
-  const summary = await computeSplitSummary(service, roomId);
+  const dateFrom = query.get('date_from');
+  const dateTo = query.get('date_to');
+  const userIdsRaw = query.get('user_ids');
+  const userIds = userIdsRaw ? userIdsRaw.split(',').map(Number).filter(Boolean) : null;
+
+  const summary = await computeSplitSummary(service, roomId, { dateFrom, dateTo, userIds });
   return jsonResponse(200, { data: summary });
 }
 
@@ -907,7 +932,7 @@ Deno.serve(async (req) => {
       }
 
       if (method === 'GET' && path.endsWith('/splits.summary')) {
-        return await handleSplitsSummary(req, roomId);
+        return await handleSplitsSummary(req, roomId, query);
       }
 
       if (method === 'POST' && path.endsWith('/splits.settleAll')) {
