@@ -27,6 +27,9 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "scheme": "roomgrub"
+    "scheme": "roomgrub",
+    "plugins": [
+      "@react-native-community/datetimepicker"
+    ]
   }
 }
