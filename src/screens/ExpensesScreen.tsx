@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import { formatAmount, formatShortDate, formatMonthYear } from '../utils/format';
+import { formatAmount, formatShortDate, formatMonthYear, formatDate } from '../utils/format';
 import { api } from '../services/api';
 import { ExpenseItem, UserSummary } from '../types/api';
 
@@ -30,6 +30,7 @@ export default function ExpensesScreen({ route }: any) {
   const [selectedMember, setSelectedMember] = useState<number | null>(null);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [showSettled, setShowSettled] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
 
   // Temp state inside modal
@@ -37,13 +38,13 @@ export default function ExpensesScreen({ route }: any) {
   const [tempDateTo, setTempDateTo] = useState<Date | null>(null);
   const [pickerTarget, setPickerTarget] = useState<'from' | 'to' | null>(null);
 
-  const loadExpenses = async (isRefresh = false) => {
+  const loadExpenses = async (isRefresh = false, settled = showSettled) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
       const [data, membersData] = await Promise.all([
-        api.listExpenses(room_id, { limit: 200 }),
+        api.listExpenses(room_id, { limit: 200, settled: settled ? 'true' : 'false' }),
         api.listMembers(room_id),
       ]);
       setExpenses(data.items);
@@ -55,8 +56,8 @@ export default function ExpensesScreen({ route }: any) {
   };
 
   useEffect(() => {
-    loadExpenses();
-  }, [room_id]);
+    loadExpenses(false, showSettled);
+  }, [room_id, showSettled]);
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
@@ -108,6 +109,7 @@ export default function ExpensesScreen({ route }: any) {
   const activeFilterCount = [
     selectedMember !== null,
     dateFrom || dateTo,
+    showSettled,
   ].filter(Boolean).length;
 
   const formatDisplayDate = (d: Date | null) =>
@@ -129,6 +131,7 @@ export default function ExpensesScreen({ route }: any) {
     setSelectedMember(null);
     setDateFrom('');
     setDateTo('');
+    setShowSettled(false);
     setTempDateFrom(null);
     setTempDateTo(null);
     setShowFilterModal(false);
@@ -145,7 +148,7 @@ export default function ExpensesScreen({ route }: any) {
     }
 
     return (
-      <View style={styles.expenseCard}>
+      <View style={[styles.expenseCard, item.settled && styles.expenseCardSettled]}>
         <View style={styles.expenseIcon}>
           <View style={styles.iconFallback}>
             <Text style={styles.iconInitial}>
@@ -164,6 +167,14 @@ export default function ExpensesScreen({ route }: any) {
             <Text style={styles.expenseMaterial}>{item.material}</Text>
             <Text style={styles.expenseDate}>{formatShortDate(item.created_at)}</Text>
           </View>
+          {item.settled && (
+            <View style={styles.settledBadge}>
+              <Ionicons name="checkmark-circle" size={12} color="#16a34a" />
+              <Text style={styles.settledBadgeText}>
+                Settled{item.settled_at ? ` · ${formatDate(item.settled_at)}` : ''}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -255,6 +266,17 @@ export default function ExpensesScreen({ route }: any) {
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
+
+            <Text style={styles.filterLabel}>Status</Text>
+            <TouchableOpacity
+              style={styles.toggleRow}
+              onPress={() => setShowSettled((v) => !v)}
+            >
+              <Text style={styles.toggleLabel}>Show settled expenses</Text>
+              <View style={[styles.toggleTrack, showSettled && styles.toggleTrackActive]}>
+                <View style={[styles.toggleThumb, showSettled && styles.toggleThumbActive]} />
+              </View>
+            </TouchableOpacity>
 
             <Text style={styles.filterLabel}>Date Range</Text>
             <View style={styles.dateRow}>
@@ -446,6 +468,37 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
   emptyText: { fontSize: 14, color: '#888' },
   endText: { textAlign: 'center', padding: 16, color: '#888', fontSize: 13 },
+  expenseCardSettled: { backgroundColor: '#f0fdf4' },
+  settledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  settledBadgeText: { fontSize: 11, color: '#16a34a', fontWeight: '500' },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  toggleLabel: { fontSize: 14, color: '#333' },
+  toggleTrack: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#e0e0e0',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  toggleTrackActive: { backgroundColor: '#9333ea' },
+  toggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+  },
+  toggleThumbActive: { alignSelf: 'flex-end' },
   // Modal
   modalOverlay: {
     flex: 1,
