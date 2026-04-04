@@ -70,12 +70,15 @@ export default function MemberDetailScreen({ route }: any) {
         </View>
       ) : (
         data.purchases.map((p) => (
-          <View key={p.expense_id} style={styles.historyCard}>
-            <View>
+          <View key={p.expense_id} style={[styles.historyCard, p.settled && styles.historyCardSettled]}>
+            <View style={{ flex: 1 }}>
               <Text style={styles.historyItem}>{p.material}</Text>
               <Text style={styles.historyDate}>{formatDate(p.created_at)}</Text>
+              {p.settled && (
+                <Text style={styles.settledLabel}>Settled</Text>
+              )}
             </View>
-            <Text style={[styles.historyAmount, { color: '#4caf50' }]}>
+            <Text style={[styles.historyAmount, { color: p.settled ? '#16a34a' : '#4caf50' }]}>
               {formatCurrency(Number(p.money))}
             </Text>
           </View>
@@ -124,6 +127,8 @@ const styles = StyleSheet.create({
   historyItem: { fontSize: 15, fontWeight: '500', color: '#333' },
   historyDate: { fontSize: 12, color: '#888', marginTop: 2 },
   historyAmount: { fontSize: 16, fontWeight: '700' },
+  historyCardSettled: { backgroundColor: '#f0fdf4' },
+  settledLabel: { fontSize: 11, color: '#16a34a', fontWeight: '500', marginTop: 2 },
   emptyCard: {
     backgroundColor: '#fff',
     borderRadius: 10,
