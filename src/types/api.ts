@@ -1,93 +1,113 @@
-export type UserSummary = {
-  user_id: number;
-  name: string;
-  email: string;
-  role: 'Admin' | 'Member' | null;
-  profile: string | null;
+export type Role = 'Admin' | 'Member';
+
+export type RoomListItem = {
+  id: number;
+  members: number;
+  admin: string;
 };
 
-export type BootstrapResponse = {
-  user: {
-    id: number;
-    uid: string;
-    email: string;
-    name: string;
-    profile: string | null;
-  };
-  membership: {
-    room_id: number | null;
-    role: 'Admin' | 'Member' | null;
-  };
-  needs_room_creation: boolean;
+export type ExpenseSummaryItem = {
+  id: number;
+  material: string;
+  money: number;
+  user: string;
+  created_at: string;
 };
 
-export type RoomSummary = {
-  room_id: number;
-  role: 'Admin' | 'Member' | null;
-  members_count: number;
-  total_expenses: number;
-  total_contributions: number;
+export type RoomSummary = RoomListItem & {
+  total_spent: number;
   pending_amount: number;
-  pending_settlements_count: number;
+  recent_expenses: ExpenseSummaryItem[];
 };
 
-export type ExpenseItem = {
-  expense_id: number;
-  room_id: number;
-  user_id: number | null;
-  user: UserSummary | null;
+export type MemberStat = {
+  user_id: number;
+  email: string;
+  name: string | null;
+  role: Role;
+  total_spent: number;
+  pending_amount: number;
+};
+
+export type DashboardResponse = {
+  room: RoomListItem;
+  members: MemberStat[];
+};
+
+export type UserSummary = {
+  id: number;
+  user_id: number;
+  email: string;
+  name: string | null;
+  role: Role;
+  joined_at: string;
+};
+
+export type MemberExpenseSummary = {
+  id: number;
   material: string;
   money: number;
   created_at: string;
-  settled: boolean;
-  settled_at: string | null;
+  settled: boolean | null;
 };
 
-export type PaymentItem = {
-  payment_id: number;
-  room_id: number;
-  user_id: number | null;
-  user: UserSummary | null;
-  amount: number;
-  status: 'credit' | 'debit';
+export type MemberDetail = UserSummary & {
+  total_spent: number;
+  pending_amount: number;
+  expenses: MemberExpenseSummary[];
+};
+
+export type ExpenseItem = {
+  id: number;
+  room: number;
+  user: string;
+  material: string;
+  money: number;
   created_at: string;
+  settled: boolean | null;
+};
+
+export type PaginatedExpenses = {
+  items: ExpenseItem[];
+  next_cursor: number | null;
 };
 
 export type SplitMemberBalance = {
-  user_id: number;
-  member: UserSummary;
-  spent: number;
+  user_email: string;
+  name: string | null;
   pending_amount: number;
-  should_pay: number;
-  balance: number;
-  status: 'credit' | 'debit' | 'even';
 };
 
-export type SplitsSummary = {
-  total_pending_expenses: number;
-  equal_share: number;
-  member_balances: SplitMemberBalance[];
-  pending_settlements_count: number;
+export type UnsettledExpense = {
+  id: number;
+  user: string;
+  material: string;
+  money: number;
+  created_at: string;
 };
 
-export type MemberDetail = {
-  member: UserSummary;
-  purchases: Array<{
-    expense_id: number;
-    material: string;
-    money: number;
-    created_at: string;
-    settled: boolean;
-  }>;
-  payments: Array<{
-    payment_id: number;
-    amount: number;
-    status: 'credit' | 'debit';
-    created_at: string;
-  }>;
-  summary: {
-    total_purchases: number;
-    total_contributed: number;
-    pending_amount: number;
-  };
+export type SplitSettlement = {
+  from_user_email: string;
+  from_name: string | null;
+  to_user_email: string;
+  to_name: string | null;
+  amount: number;
+};
+
+export type SplitsData = {
+  members: SplitMemberBalance[];
+  unsettled_expenses: UnsettledExpense[];
+  settlements: SplitSettlement[];
+};
+
+export type InviteResponse = {
+  token: string;
+  room_id: number;
+  invited_by_email: string;
+  days_left: number;
+};
+
+export type InviteAcceptResponse = {
+  room_id: number;
+  message: string;
 };

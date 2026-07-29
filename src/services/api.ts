@@ -1,118 +1,114 @@
-import { supabase } from '../utils/supabase';
+import { request } from './httpClient';
 import {
-  BootstrapResponse,
+  DashboardResponse,
   ExpenseItem,
+  InviteAcceptResponse,
+  InviteResponse,
   MemberDetail,
-  PaymentItem,
+  PaginatedExpenses,
+  Role,
+  RoomListItem,
   RoomSummary,
-  SplitsSummary,
+  SplitsData,
   UserSummary,
 } from '../types/api';
 
-type ApiMethod = 'GET' | 'POST';
-
-type ApiEnvelope<T> = {
-  data?: T;
-  error?: string;
-};
-
-async function callApi<T>(
-  path: string,
-  method: ApiMethod,
-  options?: { query?: Record<string, string | number | undefined>; payload?: Record<string, unknown> },
-): Promise<T> {
-  const query = Object.fromEntries(
-    Object.entries(options?.query || {}).filter(([, value]) => value !== undefined),
-  ) as Record<string, string>;
-
-  const { data, error } = await supabase.functions.invoke<ApiEnvelope<T>>('roomgrub_api', {
-    body: {
-      path,
-      method,
-      query,
-      payload: options?.payload || {},
-    },
-  });
-
-  if (error) {
-    throw new Error(error.message || 'Failed to reach backend');
-  }
-
-  if (!data) {
-    throw new Error('Empty API response');
-  }
-
-  if (data.error) {
-    throw new Error(data.error);
-  }
-
-  if (!data.data) {
-    throw new Error('Malformed API response');
-  }
-
-  return data.data;
-}
+type Query = Record<string, string | number | boolean | undefined>;
 
 export const api = {
-  bootstrap: () => callApi<BootstrapResponse>('/v1/bootstrap', 'POST'),
+  listRooms: () => request<RoomListItem[]>('/rooms', 'GET'),
 
-  createRoom: () =>
-    callApi<{
-      room: { id: number; members: number; admin_email: string };
-      user_membership: { room_id: number; role: 'Admin' | 'Member' | null };
-    }>('/v1/rooms.create', 'POST'),
+  createRoom: () => request<RoomListItem>('/rooms', 'POST'),
 
-  getRoomSummary: (roomId: number) =>
-    callApi<RoomSummary>(`/v1/rooms/${roomId}/summary`, 'GET'),
+  getRoomSummary: (roomId: number) => request<RoomSummary>(`/rooms/${roomId}`, 'GET'),
 
-  listMembers: (roomId: number) =>
-    callApi<{ members: UserSummary[] }>(`/v1/rooms/${roomId}/members.list`, 'GET'),
+  getRoomDashboard: (roomId: number) =>
+    request<DashboardResponse>(`/rooms/${roomId}/dashboard`, 'GET'),
 
-  inviteMember: (roomId: number, email: string) =>
-    callApi<{ status: 'invited' | 'joined_existing_user' }>(
-      `/v1/rooms/${roomId}/members.invite`,
-      'POST',
-      { payload: { email } },
-    ),
+  deleteRoom: (roomId: number) => request<void>(`/rooms/${roomId}`, 'DELETE'),
 
-  updateMemberRole: (roomId: number, targetUserId: number, role: 'Admin' | 'Member') =>
-    callApi<{ success: boolean }>(`/v1/rooms/${roomId}/members.updateRole`, 'POST', {
-      payload: { target_user_id: targetUserId, role },
+  listMembers: (roomId: number) => request<UserSummary[]>(`/rooms/${roomId}/members`, 'GET'),
+
+  getMemberDetail: (roomId: number, memberId: number) =>
+    request<MemberDetail>(`/rooms/${roomId}/members/${memberId}`, 'GET'),
+
+  updateMemberRole: (roomId: number, memberId: number, role: Role) =>
+    request<void>(`/rooms/${roomId}/members/${memberId}/role`, 'PATCH', { payload: { role } }),
+
+  exitRoom: (roomId: number) => request<void>(`/rooms/${roomId}/members/me`, 'DELETE'),
+
+  removeMember: (roomId: number, memberId: number) =>
+    request<void>(`/rooms/${roomId}/members/${memberId}`, 'DELETE'),
+
+  settleMember: (roomId: number, memberId: number) =>
+    request<void>(`/rooms/${roomId}/members/${memberId}/settle`, 'POST'),
+
+  recordContribution: (roomId: number, memberId: number, amount: number) =>
+    request<void>(`/rooms/${roomId}/members/${memberId}/contribute`, 'POST', {
+      payload: { amount },
     }),
 
-  listExpenses: (roomId: number, query?: Record<string, string | number | undefined>) =>
-    callApi<{ items: ExpenseItem[]; has_more: boolean; next_cursor: string | null }>(
-      `/v1/rooms/${roomId}/expenses.list`,
-      'GET',
-      { query },
-    ),
+  listExpenses: (roomId: number, query?: Query) =>
+    request<PaginatedExpenses>(`/rooms/${roomId}/expenses`, 'GET', { query }),
 
   createExpense: (
     roomId: number,
-    payload: { user_id: number; material: string; money: number; created_at?: string },
-  ) => callApi<ExpenseItem>(`/v1/rooms/${roomId}/expenses.create`, 'POST', { payload }),
+    payload: {
+      material: string;
+      money: number;
+      created_at?: string;
+      participant_user_ids?: number[];
+    },
+  ) => request<ExpenseItem>(`/rooms/${roomId}/expenses`, 'POST', { payload }),
 
-  listPayments: (roomId: number, query?: Record<string, string | number | undefined>) =>
-    callApi<{ items: PaymentItem[]; has_more: boolean; next_cursor: string | null }>(
-      `/v1/rooms/${roomId}/payments.list`,
-      'GET',
-      { query },
-    ),
-
-  createPayment: (
+  createExpenseForMember: (
     roomId: number,
-    payload: { user_id: number; amount: number; status: 'credit' | 'debit'; created_at?: string },
-  ) => callApi<PaymentItem>(`/v1/rooms/${roomId}/payments.create`, 'POST', { payload }),
+    payload: {
+      material: string;
+      money: number;
+      user_id: number;
+      created_at?: string;
+      participant_user_ids?: number[];
+    },
+  ) => request<ExpenseItem>(`/rooms/${roomId}/expenses/for-member`, 'POST', { payload }),
 
-  getSplitsSummary: (roomId: number, query?: Record<string, string | undefined>) =>
-    callApi<SplitsSummary>(`/v1/rooms/${roomId}/splits.summary`, 'GET', { query }),
+  updateExpense: (
+    roomId: number,
+    expenseId: number,
+    payload: { material?: string; money?: number; created_at?: string },
+  ) => request<ExpenseItem>(`/rooms/${roomId}/expenses/${expenseId}`, 'PATCH', { payload }),
 
-  settleAll: (roomId: number) =>
-    callApi<{ settled_count: number; expenses_settled: number }>(
-      `/v1/rooms/${roomId}/splits.settleAll`,
-      'POST',
-    ),
+  deleteExpense: (roomId: number, expenseId: number) =>
+    request<void>(`/rooms/${roomId}/expenses/${expenseId}`, 'DELETE'),
 
-  getMemberDetail: (roomId: number, userId: number) =>
-    callApi<MemberDetail>(`/v1/rooms/${roomId}/members/${userId}/detail`, 'GET'),
+  getSplits: (roomId: number) => request<SplitsData>(`/rooms/${roomId}/splits`, 'GET'),
+
+  settleOne: (roomId: number, userEmail: string, pendingAmount: number) =>
+    request<void>(`/rooms/${roomId}/splits/settle`, 'POST', {
+      payload: { user_email: userEmail, pending_amount: pendingAmount },
+    }),
+
+  settleAll: (
+    roomId: number,
+    members: Array<{ user_email: string; pending_amount: number }>,
+    filters?: { date_from?: string | null; date_to?: string | null; member_emails?: string[] | null },
+  ) =>
+    request<void>(`/rooms/${roomId}/splits/settle-all`, 'POST', {
+      payload: {
+        members,
+        date_from: filters?.date_from ?? null,
+        date_to: filters?.date_to ?? null,
+        member_emails: filters?.member_emails ?? null,
+      },
+    }),
+
+  createInvite: (roomId: number) =>
+    request<InviteResponse>(`/rooms/${roomId}/invites`, 'POST'),
+
+  validateInvite: (token: string) => request<InviteResponse>(`/invites/${token}`, 'GET'),
+
+  acceptInvite: (token: string) =>
+    request<InviteAcceptResponse>(`/invites/${token}/accept`, 'POST'),
+
+  rejectInvite: (token: string) => request<void>(`/invites/${token}/reject`, 'POST'),
 };
