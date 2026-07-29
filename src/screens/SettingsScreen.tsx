@@ -8,13 +8,13 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../utils/supabase';
+import { useAuth } from '../hooks/useAuth';
 
-export default function SettingsScreen({ navigation, route }: any) {
-  const room_id = route.params?.room_id;
+export default function SettingsScreen({ navigation }: any) {
+  const { logout } = useAuth();
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await logout();
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
 
@@ -23,18 +23,6 @@ export default function SettingsScreen({ navigation, route }: any) {
       <Text style={styles.heading}>Room Settings</Text>
 
       <View style={styles.card}>
-        <TouchableOpacity style={styles.settingRow}>
-          <Ionicons name="notifications-outline" size={22} color="#9333ea" />
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>Push Notifications</Text>
-            <Text style={styles.settingHint}>
-              Native push notifications will be integrated in phase 2
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        <View style={styles.divider} />
-
         <TouchableOpacity
           style={styles.settingRow}
           onPress={() =>

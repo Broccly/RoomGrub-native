@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -8,62 +8,52 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
+import { useRoomContext } from '../context/RoomContext';
 import { api } from '../services/api';
 import { colors } from '../theme/colors';
 import { formatAmount } from '../utils/format';
-import { RoomSummary, SplitsSummary } from '../types/api';
+import { MemberStat, RoomSummary } from '../types/api';
 
-export default function HomeScreen({ navigation, route }: any) {
-  const { session } = useAuth();
-  const room_id = Number(route.params?.room_id);
+export default function HomeScreen({ navigation }: any) {
+  const { user } = useAuth();
+  const { roomId } = useRoomContext();
 
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [roomSummary, setRoomSummary] = useState<RoomSummary | null>(null);
-  const [splitsSummary, setSplitsSummary] = useState<SplitsSummary | null>(null);
+  const [members, setMembers] = useState<MemberStat[]>([]);
 
-  const fullName = session?.user?.user_metadata?.full_name || session?.user?.email || 'there';
-  const firstName = fullName.split(' ')[0];
+  const firstName = (user?.name || user?.email || 'there').split(' ')[0];
 
-  const loadDashboard = async (isRefresh = false) => {
-    if (!room_id) {
-      setLoading(true);
-      try {
-        const data = await api.bootstrap();
-        if (data.membership.room_id) {
-          navigation.replace('RoomHome', { room_id: data.membership.room_id });
-        } else {
-          navigation.replace('CreateRoom');
-        }
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
+  const loadDashboard = useCallback(async (isRefresh = false) => {
+    if (!roomId) return;
 
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
-      const [summary, splits] = await Promise.all([
-        api.getRoomSummary(room_id),
-        api.getSplitsSummary(room_id),
+      const [summary, dashboard] = await Promise.all([
+        api.getRoomSummary(roomId),
+        api.getRoomDashboard(roomId),
       ]);
       setRoomSummary(summary);
-      setSplitsSummary(splits);
+      setMembers(dashboard.members);
     } catch {
       // silently fail — screens are still navigable via tabs
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [roomId]);
 
-  useEffect(() => {
-    loadDashboard();
-  }, [room_id]);
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboard();
+    }, [loadDashboard])
+  );
 
   if (loading && !roomSummary) {
     return (
@@ -94,7 +84,7 @@ export default function HomeScreen({ navigation, route }: any) {
             <View style={[styles.statBox, { backgroundColor: colors.successLight }]}>
               <Text style={[styles.statLabel, { color: colors.successDark }]}>Total Purchases</Text>
               <Text style={[styles.statValue, { color: colors.success }]}>
-                {formatAmount(roomSummary.total_expenses)}
+                {formatAmount(roomSummary.total_spent)}
               </Text>
             </View>
             <View style={[styles.statBox, { backgroundColor: colors.dangerLight }]}>
@@ -108,52 +98,53 @@ export default function HomeScreen({ navigation, route }: any) {
       )}
 
       {/* Member Summary */}
-      {splitsSummary && splitsSummary.member_balances.length > 0 && (
+      {members.length > 0 && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Member Summary</Text>
-          {splitsSummary.member_balances.map((mb) => (
-            <TouchableOpacity
-              key={mb.user_id}
-              style={[
-                styles.memberRow,
-                {
-                  borderColor: mb.pending_amount > 0 ? colors.redBorder : colors.greenBorder,
-                },
-              ]}
-              onPress={() =>
-                navigation.navigate('MemberDetail', { room_id, member_id: mb.user_id })
-              }
-              activeOpacity={0.7}
-            >
-              <View style={styles.memberLeft}>
-                <View style={styles.memberAvatarWrap}>
-                  <View style={styles.memberAvatar}>
-                    <Text style={styles.memberAvatarText}>
-                      {(mb.member.name || mb.member.email).charAt(0).toUpperCase()}
+          {members.map((member) => {
+            const isPending = member.pending_amount > 0;
+            return (
+              <TouchableOpacity
+                key={member.email}
+                style={[
+                  styles.memberRow,
+                  {
+                    borderColor: isPending ? colors.redBorder : colors.greenBorder,
+                  },
+                ]}
+                onPress={() => navigation.navigate('Members')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.memberLeft}>
+                  <View style={styles.memberAvatarWrap}>
+                    <View style={styles.memberAvatar}>
+                      <Text style={styles.memberAvatarText}>
+                        {(member.name || member.email).charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    {!isPending ? (
+                      <View style={[styles.statusDot, { backgroundColor: colors.success }]}>
+                        <Ionicons name="checkmark" size={8} color="#fff" />
+                      </View>
+                    ) : (
+                      <View style={[styles.statusDot, { backgroundColor: '#f59e0b' }]}>
+                        <Ionicons name="time" size={8} color="#fff" />
+                      </View>
+                    )}
+                  </View>
+                  <View>
+                    <Text style={styles.memberName}>{member.name || member.email}</Text>
+                    <Text style={[styles.memberStatus, { color: !isPending ? colors.success : '#f59e0b' }]}>
+                      {!isPending ? 'Settled' : 'Pending'}
                     </Text>
                   </View>
-                  {mb.status === 'even' ? (
-                    <View style={[styles.statusDot, { backgroundColor: colors.success }]}>
-                      <Ionicons name="checkmark" size={8} color="#fff" />
-                    </View>
-                  ) : (
-                    <View style={[styles.statusDot, { backgroundColor: '#f59e0b' }]}>
-                      <Ionicons name="time" size={8} color="#fff" />
-                    </View>
-                  )}
                 </View>
-                <View>
-                  <Text style={styles.memberName}>{mb.member.name || mb.member.email}</Text>
-                  <Text style={[styles.memberStatus, { color: mb.status === 'even' ? colors.success : '#f59e0b' }]}>
-                    {mb.status === 'even' ? 'Settled' : 'Pending'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={[styles.memberAmount, { color: mb.pending_amount > 0 ? colors.danger : colors.success }]}>
-                {formatAmount(mb.pending_amount)}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text style={[styles.memberAmount, { color: isPending ? colors.danger : colors.success }]}>
+                  {formatAmount(member.pending_amount)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
 

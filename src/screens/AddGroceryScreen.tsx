@@ -15,6 +15,73 @@ import useUserRole from '../hooks/useUserRole';
 import { api } from '../services/api';
 import { UserSummary } from '../types/api';
 
+function ParticipantPicker({
+  members,
+  selectedIds,
+  onToggle,
+  onOpen,
+  visible,
+  onClose,
+  lockedUserId,
+}: {
+  members: UserSummary[];
+  selectedIds: number[];
+  onToggle: (userId: number) => void;
+  onOpen: () => void;
+  visible: boolean;
+  onClose: () => void;
+  lockedUserId?: number;
+}) {
+  return (
+    <>
+      <TouchableOpacity style={styles.participantBtn} onPress={onOpen}>
+        <Ionicons name="people-outline" size={16} color="#9333ea" />
+        <Text style={styles.participantBtnText}>
+          {selectedIds.length === members.length ? 'Everyone' : `${selectedIds.length} people`}
+        </Text>
+      </TouchableOpacity>
+
+      <Modal visible={visible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Split Between</Text>
+              <TouchableOpacity onPress={onClose}>
+                <Text style={styles.closeBtn}>X</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {members.map((member) => (
+                <TouchableOpacity
+                  key={member.user_id}
+                  style={styles.participantRow}
+                  onPress={() => onToggle(member.user_id)}
+                  disabled={member.user_id === lockedUserId}
+                >
+                  <Ionicons
+                    name={selectedIds.includes(member.user_id) ? 'checkbox' : 'square-outline'}
+                    size={22}
+                    color={member.user_id === lockedUserId ? '#c4b5fd' : '#9333ea'}
+                  />
+                  <View style={styles.friendAvatarFallback}>
+                    <Text style={styles.friendAvatarText}>
+                      {(member.name || member.email).charAt(0)}
+                    </Text>
+                  </View>
+                  <Text style={styles.label}>{member.name || member.email}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={styles.addButton} onPress={onClose}>
+              <Text style={styles.addButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 export default function AddGroceryScreen({ route }: any) {
   const room_id = Number(route.params.room_id);
   const { role } = useUserRole();
@@ -28,6 +95,8 @@ export default function AddGroceryScreen({ route }: any) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
+  const [participantIds, setParticipantIds] = useState<number[]>([]);
+  const [showParticipantPicker, setShowParticipantPicker] = useState(false);
 
   const [showFriendModal, setShowFriendModal] = useState(false);
   const [selectedFriend, setSelectedFriend] = useState<UserSummary | null>(null);
@@ -37,13 +106,33 @@ export default function AddGroceryScreen({ route }: any) {
   const [showFriendDatePicker, setShowFriendDatePicker] = useState(false);
   const [friendLoading, setFriendLoading] = useState(false);
   const [friendMsg, setFriendMsg] = useState('');
+  const [friendParticipantIds, setFriendParticipantIds] = useState<number[]>([]);
+  const [showFriendParticipantPicker, setShowFriendParticipantPicker] = useState(false);
 
   useEffect(() => {
     api
       .listMembers(room_id)
-      .then((data) => setMembers(data.members))
+      .then((data) => {
+        setMembers(data);
+        const allIds = data.map((m) => m.user_id);
+        setParticipantIds(allIds);
+        setFriendParticipantIds(allIds);
+      })
       .finally(() => setMembersLoading(false));
   }, [room_id]);
+
+  const toggleParticipant = (userId: number) => {
+    setParticipantIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
+  };
+
+  const toggleFriendParticipant = (userId: number) => {
+    if (userId === selectedFriend?.user_id) return;
+    setFriendParticipantIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
+  };
 
   const handleAdd = async () => {
     setMsg('');
@@ -53,15 +142,18 @@ export default function AddGroceryScreen({ route }: any) {
       setMsg('Please fill valid grocery and price.');
       return;
     }
+    if (participantIds.length === 0) {
+      setMsg('Select at least one participant.');
+      return;
+    }
 
     setLoading(true);
     try {
-      const bootstrap = await api.bootstrap();
       await api.createExpense(room_id, {
-        user_id: bootstrap.user.id,
         material: grocery.trim(),
         money: numericPrice,
         created_at: date ? date.toISOString().split('T')[0] : undefined,
+        participant_user_ids: participantIds,
       });
       setMsg('Grocery added!');
       setGrocery('');
@@ -86,14 +178,19 @@ export default function AddGroceryScreen({ route }: any) {
       setFriendMsg('Please fill valid grocery and price.');
       return;
     }
+    if (friendParticipantIds.length === 0) {
+      setFriendMsg('Select at least one participant.');
+      return;
+    }
 
     setFriendLoading(true);
     try {
-      await api.createExpense(room_id, {
+      await api.createExpenseForMember(room_id, {
         user_id: selectedFriend.user_id,
         material: friendGrocery.trim(),
         money: numericPrice,
         created_at: friendDate ? friendDate.toISOString().split('T')[0] : undefined,
+        participant_user_ids: friendParticipantIds,
       });
       setFriendMsg(`Added for ${selectedFriend.name || selectedFriend.email}`);
       setSelectedFriend(null);
@@ -162,6 +259,15 @@ export default function AddGroceryScreen({ route }: any) {
           onCancel={() => setShowDatePicker(false)}
         />
 
+        <ParticipantPicker
+          members={members}
+          selectedIds={participantIds}
+          onToggle={toggleParticipant}
+          visible={showParticipantPicker}
+          onOpen={() => setShowParticipantPicker(true)}
+          onClose={() => setShowParticipantPicker(false)}
+        />
+
         <TouchableOpacity
           style={[styles.addButton, loading && styles.addButtonDisabled]}
           onPress={handleAdd}
@@ -220,14 +326,19 @@ export default function AddGroceryScreen({ route }: any) {
                     styles.friendChip,
                     selectedFriend?.user_id === member.user_id && styles.friendChipSelected,
                   ]}
-                  onPress={() => setSelectedFriend(member)}
+                  onPress={() => {
+                    setSelectedFriend(member);
+                    setFriendParticipantIds((prev) =>
+                      prev.includes(member.user_id) ? prev : [...prev, member.user_id],
+                    );
+                  }}
                 >
                   <View style={styles.friendAvatarFallback}>
                     <Text style={styles.friendAvatarText}>
-                      {member.name.charAt(0)}
+                      {(member.name || member.email).charAt(0)}
                     </Text>
                   </View>
-                  <Text style={styles.friendName}>{member.name}</Text>
+                  <Text style={styles.friendName}>{member.name || member.email}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -266,6 +377,16 @@ export default function AddGroceryScreen({ route }: any) {
               maximumDate={new Date()}
               onConfirm={(d) => { setFriendDate(d); setShowFriendDatePicker(false); }}
               onCancel={() => setShowFriendDatePicker(false)}
+            />
+
+            <ParticipantPicker
+              members={members}
+              selectedIds={friendParticipantIds}
+              onToggle={toggleFriendParticipant}
+              visible={showFriendParticipantPicker}
+              onOpen={() => setShowFriendParticipantPicker(true)}
+              onClose={() => setShowFriendParticipantPicker(false)}
+              lockedUserId={selectedFriend?.user_id}
             />
 
             <TouchableOpacity
@@ -352,6 +473,26 @@ const styles = StyleSheet.create({
   },
   dateBtnText: { flex: 1, fontSize: 16, color: '#999' },
   dateBtnTextActive: { color: '#9333ea', fontWeight: '500' },
+  participantBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#e9d5ff',
+    backgroundColor: '#f3e8ff',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+    alignSelf: 'flex-start',
+  },
+  participantBtnText: { color: '#9333ea', fontWeight: '500', fontSize: 14 },
+  participantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+  },
   addButton: {
     backgroundColor: '#9333ea',
     paddingVertical: 16,
