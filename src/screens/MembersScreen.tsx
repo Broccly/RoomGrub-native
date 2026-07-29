@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import useUserRole from '../hooks/useUserRole';
 import { api } from '../services/api';
 import { UserSummary } from '../types/api';
@@ -25,24 +26,26 @@ export default function MembersScreen({ navigation, route }: any) {
     member: null,
   });
 
-  const loadMembers = async (isRefresh = false) => {
+  const loadMembers = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
       const result = await api.listMembers(room_id);
-      setMembers(result.members);
+      setMembers(result);
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load members');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    loadMembers();
   }, [room_id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMembers();
+    }, [loadMembers])
+  );
 
   const handleRoleChange = async (newRole: 'Admin' | 'Member') => {
     if (!editModal.member) return;
@@ -100,12 +103,12 @@ export default function MembersScreen({ navigation, route }: any) {
             >
               <View style={styles.avatarFallback}>
                 <Text style={styles.avatarText}>
-                  {member.name.charAt(0).toUpperCase()}
+                  {(member.name || member.email).charAt(0).toUpperCase()}
                 </Text>
               </View>
               <View style={styles.memberInfo}>
                 <View style={styles.nameRow}>
-                  <Text style={styles.memberName}>{member.name}</Text>
+                  <Text style={styles.memberName}>{member.name || member.email}</Text>
                   <View
                     style={[
                       styles.roleBadge,

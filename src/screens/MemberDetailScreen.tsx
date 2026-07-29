@@ -5,21 +5,24 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { formatCurrency, formatDate } from '../utils/format';
 import { api } from '../services/api';
 import { MemberDetail } from '../types/api';
+import { useRoomContext } from '../context/RoomContext';
 
 export default function MemberDetailScreen({ route }: any) {
-  const room_id = Number(route.params.room_id);
+  const { roomId } = useRoomContext();
   const member_id = Number(route.params.member_id);
   const [data, setData] = useState<MemberDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadMember = async () => {
+    if (!roomId) return;
     setLoading(true);
     try {
-      const result = await api.getMemberDetail(room_id, member_id);
+      const result = await api.getMemberDetail(roomId, member_id);
       setData(result);
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load member');
@@ -30,7 +33,7 @@ export default function MemberDetailScreen({ route }: any) {
 
   useEffect(() => {
     loadMember();
-  }, [room_id, member_id]);
+  }, [roomId, member_id]);
 
   if (loading || !data) {
     return (
@@ -42,7 +45,7 @@ export default function MemberDetailScreen({ route }: any) {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.heading}>{data.member.name}'s Account</Text>
+      <Text style={styles.heading}>{data.name || data.email}'s Account</Text>
 
       <View style={styles.overviewCard}>
         <Text style={styles.overviewTitle}>Account Overview</Text>
@@ -50,27 +53,26 @@ export default function MemberDetailScreen({ route }: any) {
           <View style={[styles.statBox, { backgroundColor: '#f3fbf6' }]}>
             <Text style={[styles.statLabel, { color: '#166534' }]}>Total Purchases</Text>
             <Text style={[styles.statValue, { color: '#16a34a' }]}>
-              {formatCurrency(data.summary.total_purchases)}
+              {formatCurrency(data.total_spent)}
             </Text>
           </View>
           <View style={[styles.statBox, { backgroundColor: '#fdf3f3' }]}>
             <Text style={[styles.statLabel, { color: '#991b1b' }]}>Pending</Text>
-            <Text style={[styles.statValue, { color: data.summary.pending_amount > 0 ? '#dc2626' : '#16a34a' }]}>
-              {formatCurrency(data.summary.pending_amount)}
+            <Text style={[styles.statValue, { color: data.pending_amount > 0 ? '#dc2626' : '#16a34a' }]}>
+              {formatCurrency(data.pending_amount)}
             </Text>
           </View>
         </View>
-
       </View>
 
       <Text style={styles.sectionTitle}>Purchase History</Text>
-      {data.purchases.length === 0 ? (
+      {data.expenses.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyText}>No purchases found</Text>
         </View>
       ) : (
-        data.purchases.map((p) => (
-          <View key={p.expense_id} style={[styles.historyCard, p.settled && styles.historyCardSettled]}>
+        data.expenses.map((p) => (
+          <View key={p.id} style={[styles.historyCard, p.settled && styles.historyCardSettled]}>
             <View style={{ flex: 1 }}>
               <Text style={styles.historyItem}>{p.material}</Text>
               <Text style={styles.historyDate}>{formatDate(p.created_at)}</Text>

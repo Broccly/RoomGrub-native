@@ -11,114 +11,115 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import useUserRole from '../hooks/useUserRole';
+import { useRoomContext } from '../context/RoomContext';
 import { formatAmount } from '../utils/format';
 import { api } from '../services/api';
-import { SplitsSummary, UserSummary } from '../types/api';
+import { SplitsData, UserSummary } from '../types/api';
+import { computeSplitsFiltered, ComputedSplits } from '../utils/splitCalculations';
 
 const formatDisplayDate = (d: Date | null) =>
   d ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 
-export default function SplitsScreen({ route }: any) {
-  const room_id = Number(route.params.room_id);
+export default function SplitsScreen() {
+  const { roomId } = useRoomContext();
   const { role } = useUserRole();
   const [isSettling, setIsSettling] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [summary, setSummary] = useState<SplitsSummary | null>(null);
+  const [splitsData, setSplitsData] = useState<SplitsData | null>(null);
   const [members, setMembers] = useState<UserSummary[]>([]);
 
   // Applied filters
   const [dateFrom, setDateFrom] = useState<Date | null>(null);
   const [dateTo, setDateTo] = useState<Date | null>(null);
-  const [selectedMembers, setSelectedMembers] = useState<Set<number>>(new Set());
+  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
 
   // Modal state
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [tempDateFrom, setTempDateFrom] = useState<Date | null>(null);
   const [tempDateTo, setTempDateTo] = useState<Date | null>(null);
-  const [tempMembers, setTempMembers] = useState<Set<number>>(new Set());
+  const [tempEmails, setTempEmails] = useState<Set<string>>(new Set());
   const [pickerTarget, setPickerTarget] = useState<'from' | 'to' | null>(null);
 
   const activeFilterCount =
-    (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (selectedMembers.size > 0 ? 1 : 0);
+    (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (selectedEmails.size > 0 ? 1 : 0);
 
-  const buildQuery = useCallback(
-    (from: Date | null, to: Date | null, memberIds: Set<number>) => {
-      const q: Record<string, string | undefined> = {};
-      if (from) q.date_from = from.toISOString().split('T')[0];
-      if (to) q.date_to = to.toISOString().split('T')[0];
-      if (memberIds.size > 0) q.user_ids = Array.from(memberIds).join(',');
-      return q;
+  const computed: ComputedSplits | null = splitsData
+    ? computeSplitsFiltered(splitsData, {
+        dateFrom,
+        dateTo,
+        memberEmails: selectedEmails.size > 0 ? Array.from(selectedEmails) : undefined,
+      })
+    : null;
+
+  const loadSplits = useCallback(
+    async (isRefresh = false) => {
+      if (!roomId) return;
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+
+      try {
+        const data = await api.getSplits(roomId);
+        setSplitsData(data);
+      } catch (error) {
+        Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load splits');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
     },
-    [],
+    [roomId],
   );
 
-  const loadSummary = async (
-    isRefresh = false,
-    from = dateFrom,
-    to = dateTo,
-    memberIds = selectedMembers,
-  ) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-
-    try {
-      const query = buildQuery(from, to, memberIds);
-      const data = await api.getSplitsSummary(room_id, Object.keys(query).length ? query : undefined);
-      setSummary(data);
-    } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load splits');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
   useEffect(() => {
-    api.listMembers(room_id)
-      .then((res) => setMembers(res.members))
-      .catch(() => {});
-    loadSummary();
-  }, [room_id]);
+    if (!roomId) return;
+    api.listMembers(roomId).then(setMembers).catch(() => {});
+  }, [roomId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSplits();
+    }, [loadSplits])
+  );
 
   const openFilterModal = () => {
     setTempDateFrom(dateFrom);
     setTempDateTo(dateTo);
-    setTempMembers(new Set(selectedMembers));
+    setTempEmails(new Set(selectedEmails));
     setShowFilterModal(true);
   };
 
   const applyFilters = () => {
     setDateFrom(tempDateFrom);
     setDateTo(tempDateTo);
-    setSelectedMembers(new Set(tempMembers));
+    setSelectedEmails(new Set(tempEmails));
     setShowFilterModal(false);
-    loadSummary(false, tempDateFrom, tempDateTo, tempMembers);
   };
 
   const clearAllFilters = () => {
     setTempDateFrom(null);
     setTempDateTo(null);
-    setTempMembers(new Set());
+    setTempEmails(new Set());
   };
 
-  const toggleTempMember = (id: number) => {
-    setTempMembers((prev) => {
+  const toggleTempMember = (email: string) => {
+    setTempEmails((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(email)) next.delete(email);
+      else next.add(email);
       return next;
     });
   };
 
   const handleSettleAll = () => {
-    if (!summary) return;
+    if (!roomId || !computed) return;
 
     Alert.alert(
       'Settle All',
-      `Settle all ${summary.pending_settlements_count} pending balances?`,
+      `Settle all ${computed.pendingSettlements.length} pending balances?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -126,9 +127,20 @@ export default function SplitsScreen({ route }: any) {
           onPress: async () => {
             setIsSettling(true);
             try {
-              const result = await api.settleAll(room_id);
-              Alert.alert('Success', `${result.expenses_settled} expense${result.expenses_settled !== 1 ? 's' : ''} settled.`);
-              await loadSummary(true);
+              await api.settleAll(
+                roomId,
+                computed.pendingSettlements.map((mb) => ({
+                  user_email: mb.member.user_email,
+                  pending_amount: mb.balance,
+                })),
+                {
+                  date_from: dateFrom ? dateFrom.toISOString().split('T')[0] : null,
+                  date_to: dateTo ? dateTo.toISOString().split('T')[0] : null,
+                  member_emails: selectedEmails.size > 0 ? Array.from(selectedEmails) : null,
+                },
+              );
+              Alert.alert('Success', 'Balances settled.');
+              await loadSplits(true);
             } catch (error) {
               Alert.alert('Error', error instanceof Error ? error.message : 'Failed to settle balances');
             } finally {
@@ -140,7 +152,7 @@ export default function SplitsScreen({ route }: any) {
     );
   };
 
-  if (loading || !summary) {
+  if (loading || !computed) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#9333ea" />
@@ -171,20 +183,20 @@ export default function SplitsScreen({ route }: any) {
 
       <ScrollView
         style={styles.container}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadSummary(true)} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadSplits(true)} />}
       >
         <View style={styles.summaryRow}>
           <View style={[styles.summaryCard, { backgroundColor: '#ede9fe' }]}>
             <Text style={styles.summaryLabel}>Total Pending</Text>
-            <Text style={styles.summaryValue}>{formatAmount(summary.total_pending_expenses)}</Text>
+            <Text style={styles.summaryValue}>{formatAmount(computed.totalPendingExpenses)}</Text>
           </View>
           <View style={[styles.summaryCard, { backgroundColor: '#dcfce7' }]}>
-            <Text style={styles.summaryLabel}>Per Person</Text>
-            <Text style={styles.summaryValue}>{formatAmount(summary.equal_share)}</Text>
+            <Text style={styles.summaryLabel}>Transfers Needed</Text>
+            <Text style={styles.summaryValue}>{computed.settlements.length}</Text>
           </View>
         </View>
 
-        {summary.pending_settlements_count === 0 ? (
+        {computed.pendingSettlements.length === 0 ? (
           <View style={styles.allClearContainer}>
             <Ionicons name="checkmark-circle" size={80} color="#4caf50" />
             <Text style={styles.allClearTitle}>All Clear!</Text>
@@ -194,21 +206,23 @@ export default function SplitsScreen({ route }: any) {
           </View>
         ) : (
           <>
-            {summary.member_balances.map((mb) => {
+            {computed.memberBalances.map((mb) => {
               const cardColor =
                 mb.status === 'credit' ? '#dcfce7' : mb.status === 'debit' ? '#fee2e2' : '#f3f4f6';
 
               return (
-                <View key={mb.user_id} style={[styles.memberCard, { backgroundColor: cardColor }]}>
+                <View key={mb.member.user_email} style={[styles.memberCard, { backgroundColor: cardColor }]}>
                   <View style={styles.memberHeader}>
                     <View style={styles.avatarFallback}>
                       <Text style={styles.avatarText}>
-                        {(mb.member.name || mb.member.email).charAt(0).toUpperCase()}
+                        {(mb.member.name || mb.member.user_email).charAt(0).toUpperCase()}
                       </Text>
                     </View>
                     <View style={styles.memberInfo}>
-                      <Text style={styles.memberName}>{mb.member.name || mb.member.email}</Text>
-                      <Text style={styles.pendingText}>Pending: {formatAmount(mb.pending_amount)}</Text>
+                      <Text style={styles.memberName}>{mb.member.name || mb.member.user_email}</Text>
+                      <Text style={styles.pendingText}>
+                        {mb.status === 'credit' ? 'Gets back' : mb.status === 'debit' ? 'Owes' : 'Settled up'}
+                      </Text>
                     </View>
                     <View style={styles.balanceContainer}>
                       <Ionicons
@@ -233,6 +247,21 @@ export default function SplitsScreen({ route }: any) {
               );
             })}
 
+            {computed.settlements.length > 0 && (
+              <View style={styles.whoPaysSection}>
+                <Text style={styles.whoPaysHeading}>Who Pays Whom</Text>
+                {computed.settlements.map((s, idx) => (
+                  <View key={`${s.from_user_email}-${s.to_user_email}-${idx}`} style={styles.whoPaysCard}>
+                    <Text style={styles.whoPaysName}>{s.from_name || s.from_user_email}</Text>
+                    <Text style={styles.whoPaysVerb}>pays</Text>
+                    <Text style={styles.whoPaysName}>{s.to_name || s.to_user_email}</Text>
+                    <View style={{ flex: 1 }} />
+                    <Text style={styles.whoPaysAmount}>{formatAmount(s.amount)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
             {role === 'Admin' && (
               <TouchableOpacity
                 style={[styles.settleButton, isSettling && { opacity: 0.6 }]}
@@ -240,7 +269,7 @@ export default function SplitsScreen({ route }: any) {
                 disabled={isSettling}
               >
                 <Text style={styles.settleButtonText}>
-                  {isSettling ? 'Settling...' : `Settle All (${summary.pending_settlements_count})`}
+                  {isSettling ? 'Settling...' : `Settle All (${computed.pendingSettlements.length})`}
                 </Text>
               </TouchableOpacity>
             )}
@@ -304,18 +333,18 @@ export default function SplitsScreen({ route }: any) {
                   contentContainerStyle={styles.memberChips}
                 >
                   <TouchableOpacity
-                    style={[styles.chip, tempMembers.size === 0 && styles.chipActive]}
-                    onPress={() => setTempMembers(new Set())}
+                    style={[styles.chip, tempEmails.size === 0 && styles.chipActive]}
+                    onPress={() => setTempEmails(new Set())}
                   >
-                    <Text style={[styles.chipText, tempMembers.size === 0 && styles.chipTextActive]}>All</Text>
+                    <Text style={[styles.chipText, tempEmails.size === 0 && styles.chipTextActive]}>All</Text>
                   </TouchableOpacity>
                   {members.map((m) => (
                     <TouchableOpacity
-                      key={m.user_id}
-                      style={[styles.chip, tempMembers.has(m.user_id) && styles.chipActive]}
-                      onPress={() => toggleTempMember(m.user_id)}
+                      key={m.email}
+                      style={[styles.chip, tempEmails.has(m.email) && styles.chipActive]}
+                      onPress={() => toggleTempMember(m.email)}
                     >
-                      <Text style={[styles.chipText, tempMembers.has(m.user_id) && styles.chipTextActive]}>
+                      <Text style={[styles.chipText, tempEmails.has(m.email) && styles.chipTextActive]}>
                         {m.name || m.email}
                       </Text>
                     </TouchableOpacity>
@@ -415,6 +444,28 @@ const styles = StyleSheet.create({
   pendingText: { fontSize: 12, color: '#888', marginTop: 2 },
   balanceContainer: { alignItems: 'flex-end' },
   balanceAmount: { fontSize: 20, fontWeight: '700', color: '#333', marginTop: 4 },
+  whoPaysSection: { marginTop: 4, marginBottom: 8 },
+  whoPaysHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#888',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  whoPaysCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3e8ff',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+    gap: 6,
+  },
+  whoPaysName: { fontSize: 14, fontWeight: '600', color: '#333' },
+  whoPaysVerb: { fontSize: 14, color: '#888' },
+  whoPaysAmount: { fontSize: 14, fontWeight: '700', color: '#7e22ce' },
   settleButton: {
     backgroundColor: '#7e22ce',
     paddingVertical: 16,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,22 +12,30 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import { formatAmount, formatShortDate, formatMonthYear, formatDate } from '../utils/format';
+import { formatAmount, formatShortDate, formatMonthYear } from '../utils/format';
 import { api } from '../services/api';
 import { ExpenseItem, UserSummary } from '../types/api';
+
+const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 300;
 
 export default function ExpensesScreen({ route }: any) {
   const room_id = Number(route.params.room_id);
 
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+  const [cursor, setCursor] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [members, setMembers] = useState<UserSummary[]>([]);
 
   // Filters
-  const [selectedMember, setSelectedMember] = useState<number | null>(null);
+  const [selectedMember, setSelectedMember] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showSettled, setShowSettled] = useState(false);
@@ -38,49 +46,77 @@ export default function ExpensesScreen({ route }: any) {
   const [tempDateTo, setTempDateTo] = useState<Date | null>(null);
   const [pickerTarget, setPickerTarget] = useState<'from' | 'to' | null>(null);
 
-  const loadExpenses = async (isRefresh = false, settled = showSettled) => {
+  // Debounce free-text search before it drives a server query, matching the web app.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const loadExpenses = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
-      const [data, membersData] = await Promise.all([
-        api.listExpenses(room_id, { limit: 200, settled: settled ? 'true' : 'false' }),
-        api.listMembers(room_id),
-      ]);
+      const data = await api.listExpenses(room_id, {
+        limit: PAGE_SIZE,
+        settled: showSettled ? undefined : 'false',
+        search: debouncedSearch || undefined,
+        user_email: selectedMember || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+      });
       setExpenses(data.items);
-      setMembers(membersData.members);
+      setCursor(data.next_cursor);
+      setHasMore(data.next_cursor !== null);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  }, [room_id, debouncedSearch, selectedMember, dateFrom, dateTo, showSettled]);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore || cursor === null) return;
+    setLoadingMore(true);
+    try {
+      const data = await api.listExpenses(room_id, {
+        limit: PAGE_SIZE,
+        cursor,
+        settled: showSettled ? undefined : 'false',
+        search: debouncedSearch || undefined,
+        user_email: selectedMember || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+      });
+      setExpenses((prev) => [...prev, ...data.items]);
+      setCursor(data.next_cursor);
+      setHasMore(data.next_cursor !== null);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   useEffect(() => {
-    loadExpenses(false, showSettled);
-  }, [room_id, showSettled]);
+    api.listMembers(room_id).then(setMembers).catch(() => {});
+  }, [room_id]);
 
-  const filteredExpenses = useMemo(() => {
-    return expenses.filter((e) => {
-      if (search && !e.material.toLowerCase().includes(search.toLowerCase())) return false;
-      if (selectedMember !== null && e.user_id !== selectedMember) return false;
-      if (dateFrom) {
-        const from = new Date(dateFrom);
-        from.setHours(0, 0, 0, 0);
-        if (new Date(e.created_at) < from) return false;
-      }
-      if (dateTo) {
-        const to = new Date(dateTo);
-        to.setHours(23, 59, 59, 999);
-        if (new Date(e.created_at) > to) return false;
-      }
-      return true;
+  useFocusEffect(
+    useCallback(() => {
+      loadExpenses(false);
+    }, [loadExpenses])
+  );
+
+  const memberNameByEmail = useMemo(() => {
+    const map: Record<string, string> = {};
+    members.forEach((m) => {
+      if (m.email) map[m.email] = m.name || m.email;
     });
-  }, [expenses, search, selectedMember, dateFrom, dateTo]);
+    return map;
+  }, [members]);
 
   const groupedExpenses = useMemo(() => {
     const groups: Record<string, { monthKey: string; monthName: string; expenses: ExpenseItem[]; total: number }> = {};
 
-    filteredExpenses.forEach((expense) => {
+    expenses.forEach((expense) => {
       const date = new Date(expense.created_at);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth()).padStart(2, '0')}`;
       const monthName = formatMonthYear(expense.created_at);
@@ -93,14 +129,14 @@ export default function ExpensesScreen({ route }: any) {
     });
 
     return Object.values(groups).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
-  }, [filteredExpenses]);
+  }, [expenses]);
 
   const flatData = useMemo(() => {
     const items: any[] = [];
     groupedExpenses.forEach((group) => {
       items.push({ type: 'header', monthName: group.monthName, total: group.total, key: `h-${group.monthKey}` });
       group.expenses.forEach((e) => {
-        items.push({ type: 'expense', ...e, key: `e-${e.expense_id}` });
+        items.push({ type: 'expense', ...e, key: `e-${e.id}` });
       });
     });
     return items;
@@ -147,19 +183,21 @@ export default function ExpensesScreen({ route }: any) {
       );
     }
 
+    const userDisplayName = memberNameByEmail[item.user] || item.user;
+
     return (
       <View style={[styles.expenseCard, item.settled && styles.expenseCardSettled]}>
         <View style={styles.expenseIcon}>
           <View style={styles.iconFallback}>
             <Text style={styles.iconInitial}>
-              {(item.user?.name || item.user?.email || '?').charAt(0).toUpperCase()}
+              {(userDisplayName || '?').charAt(0).toUpperCase()}
             </Text>
           </View>
         </View>
         <View style={styles.expenseInfo}>
           <View style={styles.expenseRow}>
             <Text style={styles.expenseUser}>
-              {item.user?.name || item.user?.email || 'Unknown'}
+              {userDisplayName || 'Unknown'}
             </Text>
             <Text style={styles.expenseAmount}>{formatAmount(item.money)}</Text>
           </View>
@@ -170,9 +208,7 @@ export default function ExpensesScreen({ route }: any) {
           {item.settled && (
             <View style={styles.settledBadge}>
               <Ionicons name="checkmark-circle" size={12} color="#16a34a" />
-              <Text style={styles.settledBadgeText}>
-                Settled{item.settled_at ? ` · ${formatDate(item.settled_at)}` : ''}
-              </Text>
+              <Text style={styles.settledBadgeText}>Settled</Text>
             </View>
           )}
         </View>
@@ -221,10 +257,10 @@ export default function ExpensesScreen({ route }: any) {
           {members.map((m) => (
             <TouchableOpacity
               key={m.user_id}
-              style={[styles.chip, selectedMember === m.user_id && styles.chipActive]}
-              onPress={() => setSelectedMember(selectedMember === m.user_id ? null : m.user_id)}
+              style={[styles.chip, selectedMember === m.email && styles.chipActive]}
+              onPress={() => setSelectedMember(selectedMember === m.email ? null : m.email)}
             >
-              <Text style={[styles.chipText, selectedMember === m.user_id && styles.chipTextActive]}>
+              <Text style={[styles.chipText, selectedMember === m.email && styles.chipTextActive]}>
                 {m.name || m.email}
               </Text>
             </TouchableOpacity>
@@ -242,6 +278,8 @@ export default function ExpensesScreen({ route }: any) {
           renderItem={renderItem}
           keyExtractor={(item) => item.key}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadExpenses(true)} />}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyTitle}>No expenses found</Text>
@@ -249,7 +287,9 @@ export default function ExpensesScreen({ route }: any) {
             </View>
           }
           ListFooterComponent={
-            filteredExpenses.length > 0 ? (
+            loadingMore ? (
+              <ActivityIndicator style={{ marginVertical: 16 }} color="#9333ea" />
+            ) : expenses.length > 0 && !hasMore ? (
               <Text style={styles.endText}>No more expenses</Text>
             ) : null
           }
