@@ -8,10 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/api';
-
-const ROOM_STORAGE_KEY = 'roomgrub_user_room';
 
 export default function CreateRoomScreen({ navigation }: any) {
   const features = [
@@ -23,15 +20,10 @@ export default function CreateRoomScreen({ navigation }: any) {
   const handleCreateRoom = async () => {
     try {
       const result = await api.createRoom();
-      await AsyncStorage.setItem(ROOM_STORAGE_KEY, String(result.room.id));
-      navigation.replace('RoomHome', { room_id: result.room.id });
+      navigation.replace('RoomHome', { room_id: result.id });
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create room');
     }
-  };
-
-  const handleJoinRequest = () => {
-    Alert.alert('Info', 'Ask your friend to invite you to a room.');
   };
 
   return (
@@ -53,20 +45,6 @@ export default function CreateRoomScreen({ navigation }: any) {
           </TouchableOpacity>
           <Text style={styles.buttonHint}>
             Set up a room and invite your friends
-          </Text>
-
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity style={styles.outlineButton} onPress={handleJoinRequest}>
-            <Ionicons name="person-add" size={18} color="#666" />
-            <Text style={styles.outlineButtonText}>Ask friends to invite you</Text>
-          </TouchableOpacity>
-          <Text style={styles.buttonHint}>
-            Get an invitation link from your roommates
           </Text>
         </View>
 
@@ -155,35 +133,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 8,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#ddd',
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    fontSize: 12,
-    color: '#999',
-  },
-  outlineButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    paddingVertical: 12,
-    borderRadius: 10,
-    gap: 8,
-  },
-  outlineButtonText: {
-    color: '#555',
-    fontSize: 15,
   },
   featuresCard: {
     width: '100%',

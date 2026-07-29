@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import ExpensesScreen from '../screens/ExpensesScreen';
 import SplitsScreen from '../screens/SplitsScreen';
 import MembersScreen from '../screens/MembersScreen';
 import { colors } from '../theme/colors';
+import { useRoomContext } from '../context/RoomContext';
 
 const Tab = createBottomTabNavigator();
 
@@ -22,6 +23,11 @@ type BottomTabNavProps = {
 
 export default function BottomTabNavigator({ navigation, route }: BottomTabNavProps) {
   const room_id = route.params?.room_id;
+  const { setRoomId } = useRoomContext();
+
+  useEffect(() => {
+    setRoomId(room_id ?? null);
+  }, [room_id, setRoomId]);
 
   return (
     <Tab.Navigator
@@ -85,6 +91,7 @@ export default function BottomTabNavigator({ navigation, route }: BottomTabNavPr
         component={MembersScreen}
         initialParams={{ room_id }}
         options={{
+          title: 'Friends',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people" size={size} color={color} />
           ),
