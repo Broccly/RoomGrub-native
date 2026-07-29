@@ -1,30 +1,42 @@
 import React, { useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/api';
-
-const ROOM_STORAGE_KEY = 'roomgrub_user_room';
+import { useAuth } from '../hooks/useAuth';
+import { consumePendingInviteToken } from '../utils/pendingInvite';
 
 export default function AuthCallbackScreen({ navigation }: any) {
+  const { user, loading } = useAuth();
+
   useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      navigation.replace('Login');
+      return;
+    }
+
     const handleAuth = async () => {
       try {
-        const bootstrap = await api.bootstrap();
-
-        if (bootstrap.membership.room_id) {
-          await AsyncStorage.setItem(ROOM_STORAGE_KEY, String(bootstrap.membership.room_id));
-          navigation.replace('RoomHome', { room_id: bootstrap.membership.room_id });
-          return;
+        const pendingToken = consumePendingInviteToken();
+        if (pendingToken) {
+          try {
+            const result = await api.acceptInvite(pendingToken);
+            navigation.replace('RoomHome', { room_id: result.room_id });
+            return;
+          } catch {
+            // fall through to the normal rooms-list routing if the invite failed
+          }
         }
 
-        navigation.replace('CreateRoom');
+        const rooms = await api.listRooms();
+        navigation.replace(rooms.length === 0 ? 'CreateRoom' : 'RoomsList');
       } catch (error) {
         navigation.replace('Login');
       }
     };
 
     handleAuth();
-  }, [navigation]);
+  }, [user, loading, navigation]);
 
   return (
     <View style={styles.container}>

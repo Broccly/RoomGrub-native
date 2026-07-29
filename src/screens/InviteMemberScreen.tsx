@@ -2,62 +2,87 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   TouchableOpacity,
+  Share,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '../services/api';
+import { colors } from '../theme/colors';
+import { useRoomContext } from '../context/RoomContext';
 
-export default function InviteMemberScreen({ route }: any) {
-  const room_id = Number(route.params.room_id);
-  const [email, setEmail] = useState('');
-  const [status, setStatus] = useState('');
+export default function InviteMemberScreen() {
+  const { roomId } = useRoomContext();
   const [loading, setLoading] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [daysLeft, setDaysLeft] = useState<number | null>(null);
 
-  const handleInvite = async () => {
-    if (!email) {
-      setStatus('Please enter a valid email.');
-      return;
-    }
-
+  const handleGenerateLink = async () => {
+    if (!roomId) return;
     setLoading(true);
-    setStatus('');
-
     try {
-      const result = await api.inviteMember(room_id, email);
-      if (result.status === 'joined_existing_user') {
-        setStatus(`User added to your room: ${email}`);
-      } else {
-        setStatus(`Invite sent to ${email}`);
-      }
-      setEmail('');
+      const result = await api.createInvite(roomId);
+      setInviteLink(`roomgrub://invite/${result.token}`);
+      setDaysLeft(result.days_left);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to send invite');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create invite');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!inviteLink) return;
+    try {
+      await Share.share({
+        message: `Join my room on RoomGrub: ${inviteLink}`,
+        url: inviteLink,
+      });
+    } catch {
+      // user cancelled or share failed silently
     }
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>Invite a Member</Text>
+        <View style={styles.iconWrap}>
+          <Ionicons name="person-add" size={28} color={colors.brand} />
+        </View>
+        <Text style={styles.title}>Invite a Friend</Text>
+        <Text style={styles.subtitle}>
+          Generate a link and share it with whoever you want to add to this room.
+        </Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email Address"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          placeholderTextColor="#999"
-        />
-
-        <TouchableOpacity style={styles.button} onPress={handleInvite} disabled={loading}>
-          <Text style={styles.buttonText}>{loading ? 'Sending...' : 'Send Invite'}</Text>
-        </TouchableOpacity>
-
-        {status !== '' && <Text style={styles.status}>{status}</Text>}
+        {!inviteLink ? (
+          <TouchableOpacity style={styles.button} onPress={handleGenerateLink} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Generate Invite Link</Text>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <>
+            <View style={styles.linkBox}>
+              <Text style={styles.linkText} numberOfLines={1}>
+                {inviteLink}
+              </Text>
+            </View>
+            {daysLeft !== null && (
+              <Text style={styles.hint}>Expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}</Text>
+            )}
+            <TouchableOpacity style={styles.button} onPress={handleShare}>
+              <Ionicons name="share-social-outline" size={18} color="#fff" />
+              <Text style={styles.buttonText}>Share Link</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={handleGenerateLink} disabled={loading}>
+              <Text style={styles.secondaryButtonText}>Generate New Link</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </View>
   );
@@ -66,7 +91,7 @@ export default function InviteMemberScreen({ route }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
@@ -81,39 +106,66 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     alignItems: 'center',
   },
+  iconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.brandLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     color: '#333',
-    marginBottom: 24,
+    marginBottom: 8,
   },
-  input: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    marginBottom: 16,
-    color: '#333',
+  subtitle: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+    marginBottom: 20,
   },
   button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     width: '100%',
-    backgroundColor: '#9333ea',
+    backgroundColor: colors.brand,
     paddingVertical: 14,
     borderRadius: 10,
-    alignItems: 'center',
   },
   buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
   },
-  status: {
-    marginTop: 16,
+  secondaryButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+  },
+  secondaryButtonText: {
+    color: colors.brand,
     fontSize: 14,
-    color: '#4caf50',
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  linkBox: {
+    width: '100%',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  linkText: {
+    fontSize: 13,
+    color: '#333',
+  },
+  hint: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 16,
   },
 });

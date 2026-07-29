@@ -5,92 +5,84 @@ import {
   Image,
   StyleSheet,
   TouchableOpacity,
+  Alert,
   Platform,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import { supabase } from '../utils/supabase';
+import { useIdTokenAuthRequest } from 'expo-auth-session/providers/google';
+import { useAuth } from '../hooks/useAuth';
 
+WebBrowser.maybeCompleteAuthSession();
+
+let NativeGoogleSignin: typeof import('@react-native-google-signin/google-signin') | null = null;
 if (Platform.OS !== 'web') {
-  WebBrowser.maybeCompleteAuthSession();
+  NativeGoogleSignin = require('@react-native-google-signin/google-signin');
+  NativeGoogleSignin!.GoogleSignin.configure({
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  });
 }
 
-
 export default function LoginScreen({ navigation }: any) {
+  const { login, isAuthenticated } = useAuth();
+
+  const [, response, promptAsync] = useIdTokenAuthRequest({
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  });
+
   useEffect(() => {
-    const completeWebCallbackIfPresent = async () => {
-      if (Platform.OS !== 'web') return;
-      if (window.location.pathname !== '/auth/callback') return;
+    if (isAuthenticated) {
+      navigation.replace('AuthCallback');
+    }
+  }, [isAuthenticated, navigation]);
 
-      const hash = window.location.hash.startsWith('#')
-        ? window.location.hash.slice(1)
-        : '';
-      const params = new URLSearchParams(hash);
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !response) return;
 
-      if (accessToken && refreshToken) {
-        await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        window.history.replaceState({}, '', '/');
-        navigation.replace('AuthCallback');
+    if (response.type === 'success') {
+      const idToken = response.params.id_token;
+      if (!idToken) {
+        Alert.alert('Login failed', 'Google did not return an ID token.');
+        return;
       }
-    };
-
-    completeWebCallbackIfPresent()
-      .catch(() => undefined)
-      .finally(() => {
-        supabase.auth.getSession().then(({ data }) => {
-          if (data.session) {
-            navigation.replace('AuthCallback');
-          }
-        });
-      });
-  }, [navigation]);
+      login('google', idToken)
+        .then(() => navigation.replace('AuthCallback'))
+        .catch((error) =>
+          Alert.alert('Login failed', error instanceof Error ? error.message : 'Please try again.'),
+        );
+    } else if (response.type === 'error') {
+      Alert.alert('Login failed', 'Please try again.');
+    }
+  }, [response, login, navigation]);
 
   const signInWithGoogle = async () => {
-    const redirectUrl = Platform.OS === 'web'
-      ? `${window.location.origin}/auth/callback`
-      : 'roomgrub://auth/callback';
-    console.log('Redirect URL:', redirectUrl);
-
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: redirectUrl,
-        ...(Platform.OS === 'web' ? { skipBrowserRedirect: true } : {}),
-      },
-    });
-
-    if (error) {
-      console.error('OAuth error:', error);
-      return;
-    }
-
     if (Platform.OS === 'web') {
-      if (data?.url) {
-        window.location.assign(data.url);
-      }
+      await promptAsync();
       return;
     }
 
-    if (data?.url) {
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-      if (result.type === 'success') {
-        const url = result.url;
-        const hash = url.split('#')[1] || '';
-        const params = new URLSearchParams(hash);
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
-        if (accessToken && refreshToken) {
-          await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          navigation.replace('AuthCallback');
-        }
+    try {
+      const { GoogleSignin, isSuccessResponse } = NativeGoogleSignin!;
+      await GoogleSignin.hasPlayServices();
+      const result = await GoogleSignin.signIn();
+
+      if (!isSuccessResponse(result)) {
+        return;
       }
+
+      const idToken = result.data.idToken;
+      if (!idToken) {
+        Alert.alert('Login failed', 'Google did not return an ID token.');
+        return;
+      }
+
+      await login('google', idToken);
+      navigation.replace('AuthCallback');
+    } catch (error) {
+      const { isErrorWithCode, statusCodes } = NativeGoogleSignin!;
+      if (isErrorWithCode(error) && error.code === statusCodes.SIGN_IN_CANCELLED) {
+        return;
+      }
+      Alert.alert('Login failed', error instanceof Error ? error.message : 'Please try again.');
     }
   };
 
@@ -107,7 +99,10 @@ export default function LoginScreen({ navigation }: any) {
         <Text style={styles.subtitle}>Track expenses with your roommates</Text>
         <Text style={styles.hint}>Perfect for bachelors sharing expenses</Text>
 
-        <TouchableOpacity style={styles.googleButton} onPress={signInWithGoogle}>
+        <TouchableOpacity
+          style={styles.googleButton}
+          onPress={signInWithGoogle}
+        >
           <GoogleIcon />
           <Text style={styles.googleButtonText}>Login with Google</Text>
         </TouchableOpacity>

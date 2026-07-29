@@ -1,35 +1,55 @@
-import { useEffect, useState } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../utils/supabase';
+import { useCallback, useEffect, useState } from 'react';
+import { authApi } from '../services/authApi';
+import { setUnauthorizedHandler } from '../services/httpClient';
+import * as tokenStorage from '../utils/tokenStorage';
+import { StoredUser } from '../utils/tokenStorage';
 
 export function useAuth() {
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<StoredUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    (async () => {
+      const [token, storedUser] = await Promise.all([
+        tokenStorage.getToken(),
+        tokenStorage.getUser(),
+      ]);
       if (!mounted) return;
-      setSession(data.session ?? null);
+      setUser(token && storedUser ? storedUser : null);
       setLoading(false);
-    });
+    })();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession ?? null);
-      setLoading(false);
+    setUnauthorizedHandler(() => {
+      if (mounted) setUser(null);
     });
 
     return () => {
       mounted = false;
-      listener.subscription.unsubscribe();
+      setUnauthorizedHandler(null);
     };
   }, []);
 
+  const login = useCallback(async (provider: 'google' | 'facebook', providerToken: string) => {
+    const result = await authApi.login(provider, providerToken);
+    await tokenStorage.setToken(result.access_token);
+    await tokenStorage.setUser(result.user);
+    setUser(result.user);
+    return result.user;
+  }, []);
+
+  const logout = useCallback(async () => {
+    await tokenStorage.clearToken();
+    await tokenStorage.clearUser();
+    setUser(null);
+  }, []);
+
   return {
-    session,
+    user,
     loading,
-    isAuthenticated: Boolean(session),
-    user: (session?.user ?? null) as User | null,
+    isAuthenticated: Boolean(user),
+    login,
+    logout,
   };
 }
