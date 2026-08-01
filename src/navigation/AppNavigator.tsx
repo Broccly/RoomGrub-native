@@ -15,6 +15,7 @@ import AddGroceryScreen from '../screens/AddGroceryScreen';
 import MemberDetailScreen from '../screens/MemberDetailScreen';
 import InviteMemberScreen from '../screens/InviteMemberScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ActivityHistoryScreen from '../screens/ActivityHistoryScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -76,6 +77,7 @@ export default function AppNavigator() {
           <Stack.Screen name="MemberDetail" component={MemberDetailScreen} options={{ title: 'Member Details' }} />
           <Stack.Screen name="InviteMember" component={InviteMemberScreen} options={{ title: 'Invite Friend' }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+          <Stack.Screen name="ActivityHistory" component={ActivityHistoryScreen} options={{ title: 'Activity History' }} />
         </Stack.Navigator>
       </RoomProvider>
     </NavigationContainer>

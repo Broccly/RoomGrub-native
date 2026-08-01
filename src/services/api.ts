@@ -1,6 +1,7 @@
 import { request } from './httpClient';
 import {
   DashboardResponse,
+  ExpenseDetail,
   ExpenseItem,
   InviteAcceptResponse,
   InviteResponse,
@@ -80,6 +81,9 @@ export const api = {
 
   deleteExpense: (roomId: number, expenseId: number) =>
     request<void>(`/rooms/${roomId}/expenses/${expenseId}`, 'DELETE'),
+
+  getExpenseDetail: (roomId: number, expenseId: number) =>
+    request<ExpenseDetail>(`/rooms/${roomId}/expenses/${expenseId}`, 'GET'),
 
   getSplits: (roomId: number) => request<SplitsData>(`/rooms/${roomId}/splits`, 'GET'),
 

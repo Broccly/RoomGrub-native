@@ -16,6 +16,7 @@ import { api } from '../services/api';
 import { colors } from '../theme/colors';
 import { formatAmount } from '../utils/format';
 import { MemberStat, RoomSummary } from '../types/api';
+import Avatar from '../components/Avatar';
 
 export default function HomeScreen({ navigation }: any) {
   const { user } = useAuth();
@@ -117,11 +118,15 @@ export default function HomeScreen({ navigation }: any) {
               >
                 <View style={styles.memberLeft}>
                   <View style={styles.memberAvatarWrap}>
-                    <View style={styles.memberAvatar}>
-                      <Text style={styles.memberAvatarText}>
-                        {(member.name || member.email).charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
+                    <Avatar
+                      uri={member.profile}
+                      label={member.name || member.email}
+                      size={44}
+                      backgroundColor={colors.purpleAvatar}
+                      borderWidth={2}
+                      borderColor={colors.purpleAvatarBorder}
+                      textColor={colors.brand}
+                    />
                     {!isPending ? (
                       <View style={[styles.statusDot, { backgroundColor: colors.success }]}>
                         <Ionicons name="checkmark" size={8} color="#fff" />

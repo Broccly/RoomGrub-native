@@ -1,59 +1,81 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   RefreshControl,
-  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import ViewShot from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
 import useUserRole from '../hooks/useUserRole';
 import { useRoomContext } from '../context/RoomContext';
 import { formatAmount } from '../utils/format';
 import { api } from '../services/api';
-import { SplitsData, UserSummary } from '../types/api';
-import { computeSplitsFiltered, ComputedSplits } from '../utils/splitCalculations';
+import { SplitsData } from '../types/api';
+import { computeSplitsFiltered, ComputedSplits, MemberBalance } from '../utils/splitCalculations';
+import { colors } from '../theme/colors';
+import { showAlert } from '../utils/alert';
+import Avatar from '../components/Avatar';
 
-const formatDisplayDate = (d: Date | null) =>
-  d ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+const statusColors = {
+  credit: { border: '#86efac', bg: '#f0fdf4', text: '#16a34a' },
+  debit: { border: '#fca5a5', bg: '#fff5f5', text: '#dc2626' },
+  even: { border: '#d8b4fe', bg: colors.background, text: colors.brand },
+};
+
+function ShareCard({ computed }: { computed: ComputedSplits }) {
+  return (
+    <View style={styles.shareCard}>
+      <Text style={styles.shareHeader}>🏠 RoomGrub</Text>
+      <View style={styles.shareSummaryRow}>
+        <View style={[styles.shareSummaryTile, { backgroundColor: colors.purple100 }]}>
+          <Text style={styles.shareSummaryLabel}>Total Pending</Text>
+          <Text style={styles.shareSummaryValue}>{formatAmount(computed.totalPendingExpenses)}</Text>
+        </View>
+        <View style={[styles.shareSummaryTile, { backgroundColor: '#d1fae5' }]}>
+          <Text style={styles.shareSummaryLabel}>Transfers</Text>
+          <Text style={styles.shareSummaryValue}>{computed.settlements.length}</Text>
+        </View>
+      </View>
+      {computed.memberBalances.map((mb) => (
+        <View key={mb.member.user_email} style={styles.shareMemberRow}>
+          <Avatar
+            uri={mb.member.profile}
+            label={mb.member.name || mb.member.user_email}
+            size={32}
+            fontSize={14}
+            backgroundColor={colors.purpleAvatar}
+            textColor={colors.textSecondary}
+            style={styles.shareAvatar}
+          />
+          <Text style={styles.shareMemberName}>{mb.member.name || mb.member.user_email}</Text>
+          <View style={{ flex: 1 }} />
+          <Text style={styles.shareGlyph}>
+            {mb.status === 'credit' ? '▲' : mb.status === 'debit' ? '▼' : '✓'}
+          </Text>
+        </View>
+      ))}
+      <Text style={styles.shareFooter}>Shared via RoomGrub</Text>
+    </View>
+  );
+}
 
 export default function SplitsScreen() {
   const { roomId } = useRoomContext();
   const { role } = useUserRole();
   const [isSettling, setIsSettling] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [splitsData, setSplitsData] = useState<SplitsData | null>(null);
-  const [members, setMembers] = useState<UserSummary[]>([]);
+  const shareRef = useRef<ViewShot>(null);
 
-  // Applied filters
-  const [dateFrom, setDateFrom] = useState<Date | null>(null);
-  const [dateTo, setDateTo] = useState<Date | null>(null);
-  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
-
-  // Modal state
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [tempDateFrom, setTempDateFrom] = useState<Date | null>(null);
-  const [tempDateTo, setTempDateTo] = useState<Date | null>(null);
-  const [tempEmails, setTempEmails] = useState<Set<string>>(new Set());
-  const [pickerTarget, setPickerTarget] = useState<'from' | 'to' | null>(null);
-
-  const activeFilterCount =
-    (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (selectedEmails.size > 0 ? 1 : 0);
-
-  const computed: ComputedSplits | null = splitsData
-    ? computeSplitsFiltered(splitsData, {
-        dateFrom,
-        dateTo,
-        memberEmails: selectedEmails.size > 0 ? Array.from(selectedEmails) : undefined,
-      })
-    : null;
+  const computed: ComputedSplits | null = splitsData ? computeSplitsFiltered(splitsData, {}) : null;
 
   const loadSplits = useCallback(
     async (isRefresh = false) => {
@@ -65,7 +87,7 @@ export default function SplitsScreen() {
         const data = await api.getSplits(roomId);
         setSplitsData(data);
       } catch (error) {
-        Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load splits');
+        showAlert('Error', error instanceof Error ? error.message : 'Failed to load splits');
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -74,50 +96,16 @@ export default function SplitsScreen() {
     [roomId],
   );
 
-  useEffect(() => {
-    if (!roomId) return;
-    api.listMembers(roomId).then(setMembers).catch(() => {});
-  }, [roomId]);
-
   useFocusEffect(
     useCallback(() => {
       loadSplits();
     }, [loadSplits])
   );
 
-  const openFilterModal = () => {
-    setTempDateFrom(dateFrom);
-    setTempDateTo(dateTo);
-    setTempEmails(new Set(selectedEmails));
-    setShowFilterModal(true);
-  };
-
-  const applyFilters = () => {
-    setDateFrom(tempDateFrom);
-    setDateTo(tempDateTo);
-    setSelectedEmails(new Set(tempEmails));
-    setShowFilterModal(false);
-  };
-
-  const clearAllFilters = () => {
-    setTempDateFrom(null);
-    setTempDateTo(null);
-    setTempEmails(new Set());
-  };
-
-  const toggleTempMember = (email: string) => {
-    setTempEmails((prev) => {
-      const next = new Set(prev);
-      if (next.has(email)) next.delete(email);
-      else next.add(email);
-      return next;
-    });
-  };
-
   const handleSettleAll = () => {
     if (!roomId || !computed) return;
 
-    Alert.alert(
+    showAlert(
       'Settle All',
       `Settle all ${computed.pendingSettlements.length} pending balances?`,
       [
@@ -133,16 +121,12 @@ export default function SplitsScreen() {
                   user_email: mb.member.user_email,
                   pending_amount: mb.balance,
                 })),
-                {
-                  date_from: dateFrom ? dateFrom.toISOString().split('T')[0] : null,
-                  date_to: dateTo ? dateTo.toISOString().split('T')[0] : null,
-                  member_emails: selectedEmails.size > 0 ? Array.from(selectedEmails) : null,
-                },
+                { date_from: null, date_to: null, member_emails: null },
               );
-              Alert.alert('Success', 'Balances settled.');
+              showAlert('Success', 'Balances settled.');
               await loadSplits(true);
             } catch (error) {
-              Alert.alert('Error', error instanceof Error ? error.message : 'Failed to settle balances');
+              showAlert('Error', error instanceof Error ? error.message : 'Failed to settle balances');
             } finally {
               setIsSettling(false);
             }
@@ -152,33 +136,34 @@ export default function SplitsScreen() {
     );
   };
 
+  const handleShare = async () => {
+    if (!shareRef.current?.capture) return;
+    setIsSharing(true);
+    try {
+      const uri = await shareRef.current.capture();
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'RoomGrub Splits' });
+      }
+    } catch (error) {
+      showAlert('Error', 'Failed to share. Please try again.');
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   if (loading || !computed) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#9333ea" />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
 
   return (
     <View style={styles.wrapper}>
-      {/* Header row */}
       <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.heading}>Splits</Text>
-          <Text style={styles.subheading}>Split expenses and settle all balances</Text>
-        </View>
-        <TouchableOpacity
-          style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
-          onPress={openFilterModal}
-        >
-          <Ionicons name="options-outline" size={20} color={activeFilterCount > 0 ? '#fff' : '#9333ea'} />
-          {activeFilterCount > 0 && (
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <Text style={styles.heading}>Splits</Text>
+        <Text style={styles.subheading}>Split expenses and settle all balances</Text>
       </View>
 
       <ScrollView
@@ -186,13 +171,21 @@ export default function SplitsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadSplits(true)} />}
       >
         <View style={styles.summaryRow}>
-          <View style={[styles.summaryCard, { backgroundColor: '#ede9fe' }]}>
-            <Text style={styles.summaryLabel}>Total Pending</Text>
-            <Text style={styles.summaryValue}>{formatAmount(computed.totalPendingExpenses)}</Text>
+          <View style={[styles.summaryCard, { backgroundColor: '#fdf3f3' }]}>
+            <View style={styles.summaryLabelRow}>
+              <Ionicons name="calculator-outline" size={18} color="#dc2626" />
+              <Text style={[styles.summaryLabel, { color: '#991b1b' }]}>Total Pending</Text>
+            </View>
+            <Text style={[styles.summaryValue, { color: '#dc2626' }]}>
+              {formatAmount(computed.totalPendingExpenses)}
+            </Text>
           </View>
-          <View style={[styles.summaryCard, { backgroundColor: '#dcfce7' }]}>
-            <Text style={styles.summaryLabel}>Transfers Needed</Text>
-            <Text style={styles.summaryValue}>{computed.settlements.length}</Text>
+          <View style={[styles.summaryCard, { backgroundColor: '#f3fbf6' }]}>
+            <View style={styles.summaryLabelRow}>
+              <Ionicons name="receipt-outline" size={18} color="#16a34a" />
+              <Text style={[styles.summaryLabel, { color: '#166534' }]}>Transfers Needed</Text>
+            </View>
+            <Text style={[styles.summaryValue, { color: '#16a34a' }]}>{computed.settlements.length}</Text>
           </View>
         </View>
 
@@ -206,42 +199,32 @@ export default function SplitsScreen() {
           </View>
         ) : (
           <>
-            {computed.memberBalances.map((mb) => {
-              const cardColor =
-                mb.status === 'credit' ? '#dcfce7' : mb.status === 'debit' ? '#fee2e2' : '#f3f4f6';
+            {computed.memberBalances.map((mb: MemberBalance) => {
+              const sc = statusColors[mb.status];
 
               return (
-                <View key={mb.member.user_email} style={[styles.memberCard, { backgroundColor: cardColor }]}>
+                <View
+                  key={mb.member.user_email}
+                  style={[styles.memberCard, { backgroundColor: sc.bg, borderColor: sc.border }]}
+                >
                   <View style={styles.memberHeader}>
-                    <View style={styles.avatarFallback}>
-                      <Text style={styles.avatarText}>
-                        {(mb.member.name || mb.member.user_email).charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
+                    <Avatar
+                      uri={mb.member.profile}
+                      label={mb.member.name || mb.member.user_email}
+                      size={44}
+                      backgroundColor={colors.purpleAvatar}
+                      textColor={colors.textSecondary}
+                      style={styles.avatarFallback}
+                    />
                     <View style={styles.memberInfo}>
                       <Text style={styles.memberName}>{mb.member.name || mb.member.user_email}</Text>
                       <Text style={styles.pendingText}>
                         {mb.status === 'credit' ? 'Gets back' : mb.status === 'debit' ? 'Owes' : 'Settled up'}
                       </Text>
                     </View>
-                    <View style={styles.balanceContainer}>
-                      <Ionicons
-                        name={
-                          mb.status === 'credit'
-                            ? 'trending-up'
-                            : mb.status === 'debit'
-                            ? 'trending-down'
-                            : 'checkmark-circle'
-                        }
-                        size={20}
-                        color={
-                          mb.status === 'credit' ? '#4caf50' : mb.status === 'debit' ? '#ef4444' : '#888'
-                        }
-                      />
-                      <Text style={styles.balanceAmount}>
-                        {mb.status === 'even' ? '₹0' : formatAmount(mb.balance)}
-                      </Text>
-                    </View>
+                    <Text style={[styles.balanceAmount, { color: sc.text }]}>
+                      {mb.status === 'even' ? '₹0' : formatAmount(mb.balance)}
+                    </Text>
                   </View>
                 </View>
               );
@@ -263,15 +246,26 @@ export default function SplitsScreen() {
             )}
 
             {role === 'Admin' && (
-              <TouchableOpacity
-                style={[styles.settleButton, isSettling && { opacity: 0.6 }]}
-                onPress={handleSettleAll}
-                disabled={isSettling}
-              >
-                <Text style={styles.settleButtonText}>
-                  {isSettling ? 'Settling...' : `Settle All (${computed.pendingSettlements.length})`}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.actionsRow}>
+                <TouchableOpacity style={styles.shareButton} onPress={handleShare} disabled={isSharing}>
+                  {isSharing ? (
+                    <ActivityIndicator size="small" color={colors.brandDark} />
+                  ) : (
+                    <Ionicons name="share-outline" size={22} color={colors.brandDark} />
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.settleButton, isSettling && { opacity: 0.6 }]}
+                  onPress={handleSettleAll}
+                  disabled={isSettling}
+                >
+                  {!isSettling && <Ionicons name="card-outline" size={18} color="#fff" />}
+                  <Text style={styles.settleButtonText}>
+                    {isSettling ? 'Settling...' : `Settle All (${computed.pendingSettlements.length})`}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             )}
           </>
         )}
@@ -279,171 +273,68 @@ export default function SplitsScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Filter Modal */}
-      <Modal visible={showFilterModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filters</Text>
-              <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.filterLabel}>Date Range</Text>
-            <View style={styles.dateRow}>
-              <TouchableOpacity
-                style={[styles.dateBtn, tempDateFrom && styles.dateBtnActive]}
-                onPress={() => setPickerTarget('from')}
-              >
-                <Ionicons name="calendar-outline" size={16} color={tempDateFrom ? '#9333ea' : '#999'} />
-                <Text style={[styles.dateBtnText, tempDateFrom && styles.dateBtnTextActive]}>
-                  {tempDateFrom ? formatDisplayDate(tempDateFrom) : 'From'}
-                </Text>
-                {tempDateFrom && (
-                  <TouchableOpacity onPress={() => setTempDateFrom(null)}>
-                    <Ionicons name="close-circle" size={16} color="#9333ea" />
-                  </TouchableOpacity>
-                )}
-              </TouchableOpacity>
-              <Text style={styles.dateSep}>–</Text>
-              <TouchableOpacity
-                style={[styles.dateBtn, tempDateTo && styles.dateBtnActive]}
-                onPress={() => setPickerTarget('to')}
-              >
-                <Ionicons name="calendar-outline" size={16} color={tempDateTo ? '#9333ea' : '#999'} />
-                <Text style={[styles.dateBtnText, tempDateTo && styles.dateBtnTextActive]}>
-                  {tempDateTo ? formatDisplayDate(tempDateTo) : 'To'}
-                </Text>
-                {tempDateTo && (
-                  <TouchableOpacity onPress={() => setTempDateTo(null)}>
-                    <Ionicons name="close-circle" size={16} color="#9333ea" />
-                  </TouchableOpacity>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {members.length > 0 && (
-              <>
-                <Text style={styles.filterLabel}>Member</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.memberChipsScroll}
-                  contentContainerStyle={styles.memberChips}
-                >
-                  <TouchableOpacity
-                    style={[styles.chip, tempEmails.size === 0 && styles.chipActive]}
-                    onPress={() => setTempEmails(new Set())}
-                  >
-                    <Text style={[styles.chipText, tempEmails.size === 0 && styles.chipTextActive]}>All</Text>
-                  </TouchableOpacity>
-                  {members.map((m) => (
-                    <TouchableOpacity
-                      key={m.email}
-                      style={[styles.chip, tempEmails.has(m.email) && styles.chipActive]}
-                      onPress={() => toggleTempMember(m.email)}
-                    >
-                      <Text style={[styles.chipText, tempEmails.has(m.email) && styles.chipTextActive]}>
-                        {m.name || m.email}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </>
-            )}
-
-            <DateTimePickerModal
-              isVisible={pickerTarget !== null}
-              mode="date"
-              date={pickerTarget === 'from' ? (tempDateFrom ?? new Date()) : (tempDateTo ?? new Date())}
-              maximumDate={new Date()}
-              onConfirm={(date) => {
-                if (pickerTarget === 'from') setTempDateFrom(date);
-                else setTempDateTo(date);
-                setPickerTarget(null);
-              }}
-              onCancel={() => setPickerTarget(null)}
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.clearBtn} onPress={clearAllFilters}>
-                <Text style={styles.clearBtnText}>Clear All</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.applyBtn} onPress={applyFilters}>
-                <Text style={styles.applyBtnText}>Apply</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <View style={styles.offscreen} pointerEvents="none">
+        <ViewShot ref={shareRef} options={{ format: 'png', quality: 1 }}>
+          <ShareCard computed={computed} />
+        </ViewShot>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: { flex: 1, backgroundColor: '#faf5ff' },
+  wrapper: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1, padding: 16 },
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 8,
   },
   heading: { fontSize: 24, fontWeight: '700', color: '#333', marginBottom: 4 },
   subheading: { fontSize: 14, color: '#888' },
-  filterButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 10,
-    backgroundColor: '#f3e8ff',
-    borderWidth: 1,
-    borderColor: '#e9d5ff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterButtonActive: {
-    backgroundColor: '#9333ea',
-    borderColor: '#9333ea',
-  },
-  filterBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#7e22ce',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
   summaryRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  summaryCard: { flex: 1, borderRadius: 12, padding: 14 },
-  summaryLabel: { fontSize: 12, fontWeight: '500', color: '#555', marginBottom: 4 },
-  summaryValue: { fontSize: 20, fontWeight: '700', color: '#333' },
+  summaryCard: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  summaryLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  summaryLabel: { fontSize: 12, fontWeight: '500' },
+  summaryValue: { fontSize: 20, fontWeight: '700' },
   allClearContainer: { alignItems: 'center', paddingVertical: 48 },
   allClearTitle: { fontSize: 24, fontWeight: '700', color: '#2e7d32', marginTop: 12 },
   allClearText: { fontSize: 14, color: '#888', marginTop: 8, textAlign: 'center', maxWidth: 300 },
-  memberCard: { borderRadius: 12, padding: 16, marginBottom: 10 },
+  memberCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
   memberHeader: { flexDirection: 'row', alignItems: 'center' },
   avatarFallback: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#ddd',
+    backgroundColor: colors.purpleAvatar,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  avatarText: { fontSize: 18, fontWeight: '700', color: '#555' },
+  avatarText: { fontSize: 18, fontWeight: '700', color: colors.textSecondary },
   memberInfo: { flex: 1 },
-  memberName: { fontSize: 16, fontWeight: '600', color: '#333' },
+  memberName: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
   pendingText: { fontSize: 12, color: '#888', marginTop: 2 },
-  balanceContainer: { alignItems: 'flex-end' },
-  balanceAmount: { fontSize: 20, fontWeight: '700', color: '#333', marginTop: 4 },
+  balanceAmount: { fontSize: 20, fontWeight: '700' },
   whoPaysSection: { marginTop: 4, marginBottom: 8 },
   whoPaysHeading: {
     fontSize: 12,
@@ -456,7 +347,7 @@ const styles = StyleSheet.create({
   whoPaysCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3e8ff',
+    backgroundColor: colors.purple100,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -465,90 +356,51 @@ const styles = StyleSheet.create({
   },
   whoPaysName: { fontSize: 14, fontWeight: '600', color: '#333' },
   whoPaysVerb: { fontSize: 14, color: '#888' },
-  whoPaysAmount: { fontSize: 14, fontWeight: '700', color: '#7e22ce' },
+  whoPaysAmount: { fontSize: 14, fontWeight: '700', color: colors.brandDark },
+  actionsRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  shareButton: {
+    width: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.brandDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   settleButton: {
-    backgroundColor: '#7e22ce',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: colors.brandDark,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 8,
+    justifyContent: 'center',
   },
   settleButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    paddingBottom: 40,
+  offscreen: { position: 'absolute', top: -9999, left: -9999 },
+  shareCard: {
+    width: 380,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: 20,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  shareHeader: { fontSize: 20, fontWeight: '700', color: colors.brandDark, marginBottom: 16, textAlign: 'center' },
+  shareSummaryRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  shareSummaryTile: { flex: 1, borderRadius: 12, padding: 12 },
+  shareSummaryLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 4 },
+  shareSummaryValue: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  shareMemberRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  shareAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.purpleAvatar,
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'center',
+    marginRight: 10,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#333' },
-  filterLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  dateSep: { fontSize: 16, color: '#999' },
-  dateBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  dateBtnActive: { borderColor: '#c4b5fd', backgroundColor: '#f3e8ff' },
-  dateBtnText: { flex: 1, fontSize: 14, color: '#999' },
-  dateBtnTextActive: { color: '#9333ea', fontWeight: '500' },
-  memberChipsScroll: { flexGrow: 0, flexShrink: 0 },
-  memberChips: {
-    paddingBottom: 16,
-    gap: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  chip: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e9d5ff',
-    backgroundColor: '#fff',
-  },
-  chipActive: { backgroundColor: '#9333ea', borderColor: '#9333ea' },
-  chipText: { fontSize: 14, fontWeight: '500', color: '#666', lineHeight: 18 },
-  chipTextActive: { color: '#fff' },
-  modalButtons: { flexDirection: 'row', gap: 10, marginTop: 8 },
-  clearBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    paddingVertical: 13,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  clearBtnText: { color: '#666', fontWeight: '600' },
-  applyBtn: {
-    flex: 1,
-    backgroundColor: '#9333ea',
-    paddingVertical: 13,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  applyBtnText: { color: '#fff', fontWeight: '600' },
+  shareAvatarText: { fontSize: 14, fontWeight: '700', color: colors.textSecondary },
+  shareMemberName: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  shareGlyph: { fontSize: 16, fontWeight: '700', color: colors.brandDark },
+  shareFooter: { fontSize: 11, color: colors.brandMid, textAlign: 'center', marginTop: 8 },
 });

@@ -24,6 +24,7 @@ export type MemberStat = {
   user_id: number;
   email: string;
   name: string | null;
+  profile: string | null;
   role: Role;
   total_spent: number;
   pending_amount: number;
@@ -39,6 +40,7 @@ export type UserSummary = {
   user_id: number;
   email: string;
   name: string | null;
+  profile: string | null;
   role: Role;
   joined_at: string;
 };
@@ -75,6 +77,7 @@ export type PaginatedExpenses = {
 export type SplitMemberBalance = {
   user_email: string;
   name: string | null;
+  profile: string | null;
   pending_amount: number;
 };
 
@@ -98,6 +101,28 @@ export type SplitsData = {
   members: SplitMemberBalance[];
   unsettled_expenses: UnsettledExpense[];
   settlements: SplitSettlement[];
+};
+
+export type ExpenseParticipant = {
+  user_id: number;
+  name: string | null;
+  profile: string | null;
+  amount_paid: number;
+  amount_owed: number;
+  net: number;
+};
+
+export type ExpenseDetail = {
+  id: number;
+  room: number;
+  material: string;
+  money: number;
+  created_at: string;
+  settled: boolean | null;
+  settled_at: string | null;
+  payer_user_id: number | null;
+  payer_name: string | null;
+  participants: ExpenseParticipant[];
 };
 
 export type InviteResponse = {

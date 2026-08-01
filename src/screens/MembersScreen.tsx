@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   Modal,
   ActivityIndicator,
   RefreshControl,
@@ -14,6 +13,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import useUserRole from '../hooks/useUserRole';
 import { api } from '../services/api';
 import { UserSummary } from '../types/api';
+import Avatar from '../components/Avatar';
+import { showAlert } from '../utils/alert';
 
 export default function MembersScreen({ navigation, route }: any) {
   const room_id = Number(route.params.room_id);
@@ -34,7 +35,7 @@ export default function MembersScreen({ navigation, route }: any) {
       const result = await api.listMembers(room_id);
       setMembers(result);
     } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load members');
+      showAlert('Error', error instanceof Error ? error.message : 'Failed to load members');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -54,7 +55,7 @@ export default function MembersScreen({ navigation, route }: any) {
         ? `Promote ${editModal.member.name} to Admin?`
         : `Demote ${editModal.member.name} to Member?`;
 
-    Alert.alert('Confirm', confirmMessage, [
+    showAlert('Confirm', confirmMessage, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'OK',
@@ -64,7 +65,7 @@ export default function MembersScreen({ navigation, route }: any) {
             setEditModal({ open: false, member: null });
             loadMembers(true);
           } catch (error) {
-            Alert.alert('Error', error instanceof Error ? error.message : 'Failed to update role');
+            showAlert('Error', error instanceof Error ? error.message : 'Failed to update role');
           }
         },
       },
@@ -101,11 +102,16 @@ export default function MembersScreen({ navigation, route }: any) {
               }
               activeOpacity={0.7}
             >
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarText}>
-                  {(member.name || member.email).charAt(0).toUpperCase()}
-                </Text>
-              </View>
+              <Avatar
+                uri={member.profile}
+                label={member.name || member.email}
+                size={48}
+                backgroundColor="#ede9fe"
+                borderWidth={2}
+                borderColor="#c4b5fd"
+                textColor="#9333ea"
+                style={styles.avatarFallback}
+              />
               <View style={styles.memberInfo}>
                 <View style={styles.nameRow}>
                   <Text style={styles.memberName}>{member.name || member.email}</Text>

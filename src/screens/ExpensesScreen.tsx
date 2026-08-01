@@ -16,7 +16,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { formatAmount, formatShortDate, formatMonthYear } from '../utils/format';
 import { api } from '../services/api';
-import { ExpenseItem, UserSummary } from '../types/api';
+import { ExpenseDetail, ExpenseItem, UserSummary } from '../types/api';
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -45,6 +45,11 @@ export default function ExpensesScreen({ route }: any) {
   const [tempDateFrom, setTempDateFrom] = useState<Date | null>(null);
   const [tempDateTo, setTempDateTo] = useState<Date | null>(null);
   const [pickerTarget, setPickerTarget] = useState<'from' | 'to' | null>(null);
+
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState('');
+  const [detail, setDetail] = useState<ExpenseDetail | null>(null);
 
   // Debounce free-text search before it drives a server query, matching the web app.
   useEffect(() => {
@@ -148,6 +153,28 @@ export default function ExpensesScreen({ route }: any) {
     showSettled,
   ].filter(Boolean).length;
 
+  const handleExpenseClick = async (expenseId: number) => {
+    setDetailOpen(true);
+    setDetailLoading(true);
+    setDetailError('');
+    setDetail(null);
+    try {
+      const result = await api.getExpenseDetail(room_id, expenseId);
+      setDetail(result);
+    } catch (error) {
+      setDetailError(error instanceof Error ? error.message : 'Failed to load expense details');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const closeDetail = () => {
+    setDetailOpen(false);
+    setDetailLoading(false);
+    setDetailError('');
+    setDetail(null);
+  };
+
   const formatDisplayDate = (d: Date | null) =>
     d ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 
@@ -186,7 +213,11 @@ export default function ExpensesScreen({ route }: any) {
     const userDisplayName = memberNameByEmail[item.user] || item.user;
 
     return (
-      <View style={[styles.expenseCard, item.settled && styles.expenseCardSettled]}>
+      <TouchableOpacity
+        style={[styles.expenseCard, item.settled && styles.expenseCardSettled]}
+        activeOpacity={0.7}
+        onPress={() => handleExpenseClick(item.id)}
+      >
         <View style={styles.expenseIcon}>
           <View style={styles.iconFallback}>
             <Text style={styles.iconInitial}>
@@ -212,7 +243,7 @@ export default function ExpensesScreen({ route }: any) {
             </View>
           )}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -376,6 +407,66 @@ export default function ExpensesScreen({ route }: any) {
                 <Text style={styles.applyBtnText}>Apply</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Expense Detail Modal */}
+      <Modal visible={detailOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Expense Details</Text>
+              <TouchableOpacity onPress={closeDetail}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            {detailLoading && (
+              <ActivityIndicator size="large" color="#9333ea" style={{ paddingVertical: 24 }} />
+            )}
+
+            {!detailLoading && detailError !== '' && (
+              <View style={styles.detailErrorBanner}>
+                <Text style={styles.detailErrorBannerText}>{detailError}</Text>
+              </View>
+            )}
+
+            {!detailLoading && detailError === '' && detail && (
+              <View>
+                <Text style={styles.detailMaterial}>{detail.material}</Text>
+                <Text style={styles.detailSubtitle}>
+                  {formatAmount(detail.money)} · paid by {detail.payer_name || 'Unknown'}
+                </Text>
+
+                <Text style={styles.filterLabel}>Participants</Text>
+
+                {detail.participants.map((p) => {
+                  const netColor = p.net > 0 ? '#16a34a' : p.net < 0 ? '#dc2626' : '#888';
+                  return (
+                    <View key={p.user_id} style={styles.participantRow}>
+                      <View style={styles.participantLeft}>
+                        <View style={styles.iconFallback}>
+                          <Text style={styles.iconInitial}>
+                            {(p.name || '?').charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View>
+                          <Text style={styles.participantName}>{p.name || 'Unknown'}</Text>
+                          <Text style={styles.participantMeta}>
+                            paid {formatAmount(p.amount_paid)} · owes {formatAmount(p.amount_owed)}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.participantNet, { color: netColor }]}>
+                        {p.net > 0 ? '+' : ''}
+                        {formatAmount(p.net)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -605,4 +696,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   applyBtnText: { color: '#fff', fontWeight: '600' },
+  detailMaterial: { fontSize: 17, fontWeight: '700', color: '#333' },
+  detailSubtitle: { fontSize: 13, color: '#666', marginTop: 2, marginBottom: 16 },
+  detailErrorBanner: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
+  detailErrorBannerText: { color: '#b91c1c', fontSize: 13 },
+  participantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  participantLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  participantName: { fontSize: 14, fontWeight: '600', color: '#333' },
+  participantMeta: { fontSize: 12, color: '#666', marginTop: 2 },
+  participantNet: { fontSize: 14, fontWeight: '700' },
 });
