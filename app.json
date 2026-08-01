@@ -22,7 +22,8 @@
         "backgroundColor": "#f0f0f0"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.roomgrub.app"
+      "package": "broccly.roomgrub.twa",
+      "versionCode": 4
     },
     "web": {
       "favicon": "./assets/favicon.png"
