@@ -1,0 +1,46 @@
+appId: com.roomgrub.app
+# Broad smoke test: taps through every bottom-tab and pushed screen and
+# confirms the app doesn't crash or show a blank/error screen anywhere.
+---
+- launchApp:
+    clearState: false
+- assertVisible: "RoomGrub"
+
+- tapOn: "Home"
+- assertVisible:
+    text: "Hi .*"
+
+- tapOn: "Expenses"
+- assertVisible:
+    text: "Search expenses...|No expenses found"
+
+- tapOn: "Splits"
+- assertVisible:
+    text: "Total Pending"
+
+- tapOn: "Friends"
+- assertVisible: "Room Members"
+
+- tapOn:
+    text: "Add Friend"
+    optional: true
+- assertVisible:
+    text: "Invite a Friend"
+    optional: true
+- back
+
+- tapOn:
+    id: "settings-button"
+    optional: true
+- tapOn:
+    text: "⚙|Settings"
+    optional: true
+- assertVisible: "Room Settings"
+
+- tapOn: "Activity History"
+- assertVisible:
+    text: "Activity History|No activity"
+- back
+
+- back
+- assertVisible: "Your Rooms"

@@ -1,0 +1,32 @@
+appId: com.roomgrub.app
+# Assumes a logged-in session (run login.yaml first, or rely on Maestro's
+# state persistence between flows in the same `maestro test` invocation).
+---
+- launchApp:
+    clearState: false
+- assertVisible: "Your Rooms"
+- tapOn: "New Room"
+- assertVisible: "Create Your First Room"
+- tapOn: "Create New Room"
+- assertVisible:
+    text: "RoomGrub"
+    timeout: 10000
+
+- tapOn:
+    id: "tab-add"
+    optional: true
+- tapOn:
+    text: "Add"
+    optional: true
+
+- tapOn: "What did you buy?"
+- inputText: "Milk"
+- tapOn:
+    id: "amount-input-ADD GROCERY"
+- inputText: "50"
+- tapOn: "Add Grocery"
+- assertVisible: "Grocery added!"
+
+- tapOn: "Expenses"
+- assertVisible: "Milk"
+- assertVisible: "₹50"

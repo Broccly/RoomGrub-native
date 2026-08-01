@@ -1,0 +1,14 @@
+appId: com.roomgrub.app
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Login with Google"
+- tapOn: "Login with Google"
+# Google's native sign-in sheet is outside the app under test; Maestro drives
+# it directly (see https://maestro.mobile.dev for platform-account setup).
+- tapOn:
+    text: ".*roomgrub.*@.*" # select the pre-configured test Google account
+    optional: true
+- assertVisible:
+    text: "Your Rooms|Create Your First Room"
+    timeout: 15000

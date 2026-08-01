@@ -1,0 +1,29 @@
+appId: com.roomgrub.app
+# Requires a room already created (see create_room_and_add_expense.yaml) and
+# a second Android device/emulator to accept the invite deep link. Run with:
+#   maestro test .maestro/invite_and_join_member.yaml --device <device-1>
+# then replay the "accept" half on a second device with the copied link.
+---
+- launchApp:
+    clearState: false
+- assertVisible: "RoomGrub"
+- tapOn: "Friends"
+- tapOn: "Add Friend"
+- assertVisible: "Invite a Friend"
+- tapOn: "Generate Invite Link"
+- assertVisible:
+    text: "roomgrub://invite/.+"
+    timeout: 10000
+
+# Simulate a second user opening the invite deep link directly (in place of
+# a real second device) and completing the accept flow.
+- openLink: "roomgrub://invite/PASTE_TOKEN_FROM_PREVIOUS_STEP"
+- assertVisible: "Room Invitation"
+- tapOn: "Accept"
+- assertVisible:
+    text: "RoomGrub"
+    timeout: 10000
+
+- tapOn: "Friends"
+- assertVisible:
+    text: "2 " # member count reflects the newly joined friend

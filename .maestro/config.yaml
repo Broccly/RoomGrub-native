@@ -1,0 +1,6 @@
+# Shared Maestro config. Run flows with `maestro test .maestro/<flow>.yaml`
+# against a running Android emulator with the app installed
+# (`npm run android`), pointed at a dev/staging backend via
+# EXPO_PUBLIC_API_BASE_URL. See docs/AUTH.md for the Google test-account setup
+# required by login.yaml.
+appId: com.roomgrub.app

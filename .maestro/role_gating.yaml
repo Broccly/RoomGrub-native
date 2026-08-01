@@ -1,0 +1,24 @@
+appId: com.roomgrub.app
+# Run while logged in as a non-Admin member of a room (a Member who was
+# invited by an Admin, not the room creator).
+---
+- launchApp:
+    clearState: false
+- assertVisible: "RoomGrub"
+
+- tapOn: "Friends"
+- assertNotVisible: "Edit"
+
+- tapOn:
+    id: "settings-button"
+    optional: true
+- tapOn:
+    text: "⚙|Settings"
+    optional: true
+- assertVisible: "Room Settings"
+- assertNotVisible: "Delete Room"
+- assertVisible: "Exit Room"
+
+- tapOn: "Splits"
+- assertNotVisible:
+    text: "Settle All.*"
