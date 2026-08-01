@@ -164,6 +164,7 @@ function GroceryHeroForm({
             {amountDisplay || '0'}
           </Text>
           <TextInput
+            testID={`amount-input-${title}`}
             style={[styles.amountInput, { width: Math.max(amountWidth, 20) }]}
             value={amountDisplay}
             onChangeText={(t) => onAmountChange(sanitizeAmountInput(t))}
@@ -216,6 +217,7 @@ function GroceryHeroForm({
         </View>
 
         <TouchableOpacity
+          testID={`submit-button-${title}`}
           style={styles.submitWrap}
           onPress={onSubmit}
           disabled={loading || !canSubmit}

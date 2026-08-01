@@ -417,7 +417,7 @@ export default function ExpensesScreen({ route }: any) {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Expense Details</Text>
-              <TouchableOpacity onPress={closeDetail}>
+              <TouchableOpacity testID="close-expense-detail" onPress={closeDetail}>
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
