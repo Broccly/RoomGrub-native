@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import CrossPlatformDatePicker, { CrossPlatformDatePickerHandle } from '../components/CrossPlatformDatePicker';
 import useUserRole from '../hooks/useUserRole';
+import { useAuth } from '../hooks/useAuth';
 import { api } from '../services/api';
 import { UserSummary } from '../types/api';
 import { colors } from '../theme/colors';
@@ -240,6 +241,7 @@ function GroceryHeroForm({
 export default function AddGroceryScreen({ route }: any) {
   const room_id = Number(route.params.room_id);
   const { role } = useUserRole();
+  const { user } = useAuth();
 
   const [members, setMembers] = useState<UserSummary[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
@@ -280,6 +282,7 @@ export default function AddGroceryScreen({ route }: any) {
   }, [room_id]);
 
   const toggleParticipant = (userId: number) => {
+    if (userId === user?.id) return;
     setParticipantIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
     );
@@ -400,6 +403,7 @@ export default function AddGroceryScreen({ route }: any) {
               visible={showParticipantPicker}
               onOpen={() => setShowParticipantPicker(true)}
               onClose={() => setShowParticipantPicker(false)}
+              lockedUserId={user?.id}
             />
           }
           friendSlot={
