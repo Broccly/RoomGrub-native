@@ -9,19 +9,25 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Avatar from '../components/Avatar';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../services/api';
 import { colors } from '../theme/colors';
-import { Role, RoomListItem } from '../types/api';
+import { Role, RoomListItem, UserSummary } from '../types/api';
 
-type RoomWithRole = RoomListItem & { role: Role | null };
+const MAX_VISIBLE_AVATARS = 4;
+
+type RoomWithRole = RoomListItem & { role: Role | null; memberList: UserSummary[] };
 
 export default function RoomsListScreen({ navigation, route }: any) {
   const { user, logout } = useAuth();
+  const insets = useSafeAreaInsets();
   const prefetchedRooms: RoomWithRole[] | undefined = route?.params?.prefetchedRooms;
   const [rooms, setRooms] = useState<RoomWithRole[]>(prefetchedRooms ?? []);
   const [loading, setLoading] = useState(!prefetchedRooms);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const firstName = (user?.name || user?.email || 'there').split(' ')[0];
 
@@ -34,6 +40,7 @@ export default function RoomsListScreen({ navigation, route }: any) {
     async (isRefresh = false) => {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
+      setLoadError(false);
 
       try {
         const list = await api.listRooms();
@@ -42,15 +49,19 @@ export default function RoomsListScreen({ navigation, route }: any) {
             try {
               const members = await api.listMembers(room.id);
               const me = members.find((m) => m.email === user?.email);
-              return { ...room, role: me?.role ?? null };
+              return { ...room, role: me?.role ?? null, memberList: members };
             } catch {
-              return { ...room, role: null };
+              return { ...room, role: null, memberList: [] };
             }
           }),
         );
         setRooms(withRoles);
       } catch {
-        // silently fail — user can pull to refresh
+        // Fetch failed (offline, timeout, etc.) — a 401 already redirects to
+        // Login via the global unauthorized handler, so anything reaching
+        // here is a transient failure. Don't clobber existing rooms; just
+        // flag it so we don't claim "no rooms" when we simply don't know.
+        setLoadError(true);
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -76,7 +87,7 @@ export default function RoomsListScreen({ navigation, route }: any) {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 12 }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => loadRooms(true)} tintColor={colors.brand} />
         }
@@ -91,43 +102,62 @@ export default function RoomsListScreen({ navigation, route }: any) {
           </TouchableOpacity>
         </View>
 
-        {rooms.length === 0 ? (
+        {rooms.length === 0 && loadError ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="cloud-offline-outline" size={48} color={colors.textMuted} />
+            <Text style={styles.emptyText}>Couldn't load your rooms. Pull down to try again.</Text>
+          </View>
+        ) : rooms.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="home-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyText}>You haven't joined any rooms yet.</Text>
           </View>
         ) : (
-          rooms.map((room) => (
-            <TouchableOpacity
-              key={room.id}
-              style={styles.card}
-              activeOpacity={0.7}
-              onPress={() => navigation.navigate('RoomHome', { room_id: room.id })}
-            >
-              <View style={styles.cardLeft}>
-                <View style={styles.roomIcon}>
-                  <Ionicons name="home" size={20} color={colors.brand} />
+          rooms.map((room) => {
+            const visibleMembers = room.memberList.slice(0, MAX_VISIBLE_AVATARS);
+            const extraCount = room.members - visibleMembers.length;
+
+            return (
+              <TouchableOpacity
+                key={room.id}
+                style={styles.card}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('RoomHome', { room_id: room.id })}
+              >
+                <Text style={styles.roomName}>Room #{room.id}</Text>
+
+                <View style={styles.avatarRow}>
+                  {visibleMembers.map((member, index) => (
+                    <Avatar
+                      key={member.user_id ?? member.email ?? index}
+                      uri={member.profile}
+                      label={member.name || member.email}
+                      size={40}
+                      backgroundColor="#ede9fe"
+                      borderWidth={2}
+                      borderColor="#3a3a3a"
+                      textColor="#9333ea"
+                      style={{ marginLeft: index === 0 ? 0 : -12 }}
+                    />
+                  ))}
+                  {extraCount > 0 ? (
+                    <View style={[styles.extraCountBadge, { marginLeft: -12 }]}>
+                      <Text style={styles.extraCountText}>+{extraCount}</Text>
+                    </View>
+                  ) : null}
                 </View>
-                <View>
-                  <Text style={styles.roomName}>Room #{room.id}</Text>
-                  <Text style={styles.roomMeta}>
-                    {room.members} member{room.members !== 1 ? 's' : ''}
-                    {room.role ? ` · ${room.role}` : ''}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.openPill}>
-                <Text style={styles.openPillText}>Open</Text>
-                <Ionicons name="arrow-forward" size={14} color={colors.brand} />
-              </View>
-            </TouchableOpacity>
-          ))
+              </TouchableOpacity>
+            );
+          })
         )}
 
         <View style={{ height: 96 }} />
       </ScrollView>
 
-      <TouchableOpacity style={styles.newRoomButton} onPress={() => navigation.navigate('CreateRoom')}>
+      <TouchableOpacity
+        style={[styles.newRoomButton, { bottom: insets.bottom + 24 }]}
+        onPress={() => navigation.navigate('CreateRoom')}
+      >
         <Ionicons name="add" size={20} color="#fff" />
         <Text style={styles.newRoomButtonText}>New Room</Text>
       </TouchableOpacity>
@@ -144,7 +174,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
-    marginTop: 12,
   },
   greetingTitle: { fontSize: 24, fontWeight: '700', color: colors.textPrimary },
   greetingSubtitle: { fontSize: 14, color: colors.textLight, marginTop: 2 },
@@ -152,43 +181,31 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', paddingVertical: 64, gap: 12 },
   emptyText: { color: colors.textLight, fontSize: 15, textAlign: 'center' },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.cardBg,
+    backgroundColor: '#3a3a3a',
     borderRadius: 14,
     padding: 16,
-    marginBottom: 12,
-    elevation: 2,
+    marginBottom: 18,
+    elevation: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
   },
-  cardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  roomIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  roomName: { fontSize: 16, fontWeight: '600', color: '#fff', marginBottom: 12 },
+  avatarRow: { flexDirection: 'row', alignItems: 'center' },
+  extraCountBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.brandLight,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#3a3a3a',
   },
-  roomName: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
-  roomMeta: { fontSize: 13, color: colors.textLight, marginTop: 2 },
-  openPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.brandLight,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  openPillText: { color: colors.brand, fontWeight: '600', fontSize: 13 },
+  extraCountText: { color: colors.brand, fontWeight: '700', fontSize: 13 },
   newRoomButton: {
     position: 'absolute',
-    bottom: 24,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
