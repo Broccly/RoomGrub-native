@@ -3,6 +3,7 @@ import { useAuth } from './useAuth';
 import { authApi } from '../services/authApi';
 import * as tokenStorage from '../utils/tokenStorage';
 import * as httpClient from '../services/httpClient';
+import { __resetAuthBootstrapForTests } from '../utils/authBootstrap';
 
 jest.mock('../services/authApi');
 jest.mock('../utils/tokenStorage');
@@ -15,6 +16,7 @@ const mockUser = { id: 1, email: 'alice@example.com', name: 'Alice', profile: nu
 describe('useAuth', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetAuthBootstrapForTests();
     mockedTokenStorage.getToken.mockResolvedValue(null);
     mockedTokenStorage.getUser.mockResolvedValue(null);
   });

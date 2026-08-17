@@ -55,8 +55,8 @@ function ShareCard({ computed }: { computed: ComputedSplits }) {
           />
           <Text style={styles.shareMemberName}>{mb.member.name || mb.member.user_email}</Text>
           <View style={{ flex: 1 }} />
-          <Text style={styles.shareGlyph}>
-            {mb.status === 'credit' ? '▲' : mb.status === 'debit' ? '▼' : '✓'}
+          <Text style={[styles.shareMemberAmount, { color: statusColors[mb.status].text }]}>
+            {mb.status === 'even' ? '₹0' : formatAmount(mb.balance)}
           </Text>
         </View>
       ))}
@@ -401,6 +401,6 @@ const styles = StyleSheet.create({
   },
   shareAvatarText: { fontSize: 14, fontWeight: '700', color: colors.textSecondary },
   shareMemberName: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  shareGlyph: { fontSize: 16, fontWeight: '700', color: colors.brandDark },
+  shareMemberAmount: { fontSize: 14, fontWeight: '700' },
   shareFooter: { fontSize: 11, color: colors.brandMid, textAlign: 'center', marginTop: 8 },
 });

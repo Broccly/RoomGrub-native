@@ -16,10 +16,11 @@ import { Role, RoomListItem } from '../types/api';
 
 type RoomWithRole = RoomListItem & { role: Role | null };
 
-export default function RoomsListScreen({ navigation }: any) {
+export default function RoomsListScreen({ navigation, route }: any) {
   const { user, logout } = useAuth();
-  const [rooms, setRooms] = useState<RoomWithRole[]>([]);
-  const [loading, setLoading] = useState(true);
+  const prefetchedRooms: RoomWithRole[] | undefined = route?.params?.prefetchedRooms;
+  const [rooms, setRooms] = useState<RoomWithRole[]>(prefetchedRooms ?? []);
+  const [loading, setLoading] = useState(!prefetchedRooms);
   const [refreshing, setRefreshing] = useState(false);
 
   const firstName = (user?.name || user?.email || 'there').split(' ')[0];
@@ -59,7 +60,9 @@ export default function RoomsListScreen({ navigation }: any) {
   );
 
   useEffect(() => {
+    if (prefetchedRooms) return;
     loadRooms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadRooms]);
 
   if (loading) {

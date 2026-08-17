@@ -1,11 +1,15 @@
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
   return (
-    <>
+    <SafeAreaProvider>
       <StatusBar style="dark" />
       <AppNavigator />
-    </>
+    </SafeAreaProvider>
   );
 }

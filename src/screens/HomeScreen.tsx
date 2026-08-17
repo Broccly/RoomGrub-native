@@ -113,7 +113,12 @@ export default function HomeScreen({ navigation }: any) {
                     borderColor: isPending ? colors.redBorder : colors.greenBorder,
                   },
                 ]}
-                onPress={() => navigation.navigate('Members')}
+                onPress={() =>
+                  navigation.navigate('MemberDetail', {
+                    room_id: roomId,
+                    member_id: member.user_id,
+                  })
+                }
                 activeOpacity={0.7}
               >
                 <View style={styles.memberLeft}>

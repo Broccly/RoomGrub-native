@@ -13,6 +13,8 @@ import { api } from '../services/api';
 import { colors } from '../theme/colors';
 import { useRoomContext } from '../context/RoomContext';
 
+const INVITE_WEB_BASE = 'https://roomgrub.broccly.in';
+
 export default function InviteMemberScreen() {
   const { roomId } = useRoomContext();
   const [loading, setLoading] = useState(false);
@@ -24,7 +26,7 @@ export default function InviteMemberScreen() {
     setLoading(true);
     try {
       const result = await api.createInvite(roomId);
-      setInviteLink(`roomgrub://invite/${result.token}`);
+      setInviteLink(`${INVITE_WEB_BASE}/invite/${result.token}`);
       setDaysLeft(result.days_left);
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create invite');

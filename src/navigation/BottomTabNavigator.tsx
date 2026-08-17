@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HomeScreen from '../screens/HomeScreen';
 import ExpensesScreen from '../screens/ExpensesScreen';
@@ -24,6 +25,7 @@ type BottomTabNavProps = {
 export default function BottomTabNavigator({ navigation, route }: BottomTabNavProps) {
   const room_id = route.params?.room_id;
   const { setRoomId } = useRoomContext();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     setRoomId(room_id ?? null);
@@ -33,7 +35,7 @@ export default function BottomTabNavigator({ navigation, route }: BottomTabNavPr
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, { height: 56 + insets.bottom, paddingBottom: insets.bottom + 8 }],
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: '#9ca3af',
         tabBarLabelStyle: styles.tabLabel,
@@ -106,8 +108,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e9d5ff',
-    height: 64,
-    paddingBottom: 8,
     paddingTop: 6,
     elevation: 0,
     shadowOpacity: 0,
