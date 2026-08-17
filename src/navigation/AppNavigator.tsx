@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { View, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { RoomProvider } from '../context/RoomContext';
+import { navigationRef } from './navigationRef';
 import { getAuthBootstrap } from '../utils/authBootstrap';
+import { useAuth } from '../hooks/useAuth';
 import { api } from '../services/api';
-import { Role, RoomListItem } from '../types/api';
+import { colors } from '../theme/colors';
+import { Role, RoomListItem, UserSummary } from '../types/api';
+import Avatar from '../components/Avatar';
 import LoginScreen from '../screens/LoginScreen';
 import AuthCallbackScreen from '../screens/AuthCallbackScreen';
 import RoomsListScreen from '../screens/RoomsListScreen';
@@ -24,11 +28,11 @@ import ActivityHistoryScreen from '../screens/ActivityHistoryScreen';
 const Stack = createNativeStackNavigator();
 
 const headerStyle = {
-  headerStyle: { backgroundColor: '#fff' },
+  headerStyle: { backgroundColor: colors.background },
   headerTintColor: '#333',
   headerTitleStyle: { fontWeight: '600' as const },
   headerShadowVisible: false,
-  contentStyle: { backgroundColor: '#f0f0f0' },
+  contentStyle: { backgroundColor: colors.background },
 };
 
 const linking = {
@@ -41,11 +45,12 @@ const linking = {
   },
 };
 
-type RoomWithRole = RoomListItem & { role: Role | null };
+type RoomWithRole = RoomListItem & { role: Role | null; memberList: UserSummary[] };
 
 type InitialRoute = 'Login' | 'RoomsList' | 'CreateRoom' | null;
 
 export default function AppNavigator() {
+  const { user } = useAuth();
   const [initialRouteName, setInitialRouteName] = useState<InitialRoute>(null);
   const [prefetchedRooms, setPrefetchedRooms] = useState<RoomWithRole[] | null>(null);
 
@@ -67,19 +72,21 @@ export default function AppNavigator() {
             try {
               const members = await api.listMembers(room.id);
               const me = members.find((m) => m.email === user.email);
-              return { ...room, role: me?.role ?? null };
+              return { ...room, role: me?.role ?? null, memberList: members };
             } catch {
-              return { ...room, role: null };
+              return { ...room, role: null, memberList: [] };
             }
           }),
         );
         if (!mounted) return;
         setPrefetchedRooms(withRoles);
         setInitialRouteName(withRoles.length === 0 ? 'CreateRoom' : 'RoomsList');
-      } catch {
-        // couldn't prefetch (offline, expired session, etc.) — let RoomsList
-        // handle its own fetch/error state rather than blocking startup
-        if (mounted) setInitialRouteName('RoomsList');
+      } catch (error) {
+        // Session expired (401) — httpClient already cleared the stored
+        // token/user, so send the user straight to Login instead of
+        // showing RoomsList with a stale/empty room list.
+        const sessionExpired = error instanceof Error && error.message === 'Session expired';
+        if (mounted) setInitialRouteName(sessionExpired ? 'Login' : 'RoomsList');
       } finally {
         SplashScreen.hideAsync().catch(() => {});
       }
@@ -95,7 +102,7 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer linking={linking}>
+    <NavigationContainer ref={navigationRef} linking={linking}>
       <RoomProvider>
         <Stack.Navigator initialRouteName={initialRouteName} screenOptions={{ ...headerStyle }}>
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
@@ -114,22 +121,33 @@ export default function AppNavigator() {
             name="RoomHome"
             component={BottomTabNavigator}
             options={({ navigation, route }: any) => ({
-              title: 'RoomGrub',
+              headerTitle: () => null,
               headerLeft: () => (
-                <TouchableOpacity onPress={() => navigation.navigate('RoomsList')} style={{ padding: 4 }}>
-                  <Ionicons name="arrow-back" size={22} color="#333" />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <TouchableOpacity onPress={() => navigation.navigate('RoomsList')} style={{ padding: 4 }}>
+                    <Ionicons name="arrow-back" size={22} color="#333" />
+                  </TouchableOpacity>
+                  <RoomChip roomId={route.params?.room_id} />
+                </View>
               ),
               headerRight: () => (
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <SettingsButton
-                    onPress={() =>
-                      navigation.navigate('Settings', {
-                        room_id: route.params?.room_id,
-                      })
-                    }
+                <TouchableOpacity
+                  onPress={() =>
+                    navigation.navigate('Settings', {
+                      room_id: route.params?.room_id,
+                    })
+                  }
+                >
+                  <Avatar
+                    uri={user?.profile}
+                    label={user?.name || user?.email || '?'}
+                    size={32}
+                    backgroundColor={colors.purpleAvatar}
+                    borderWidth={1.5}
+                    borderColor={colors.purpleAvatarBorder}
+                    textColor={colors.brand}
                   />
-                </View>
+                </TouchableOpacity>
               ),
             })}
           />
@@ -146,10 +164,24 @@ export default function AppNavigator() {
   );
 }
 
-function SettingsButton({ onPress }: { onPress: () => void }) {
+function RoomChip({ roomId }: { roomId?: number }) {
   return (
-    <TouchableOpacity onPress={onPress} style={{ padding: 4 }}>
-      <Ionicons name="settings-outline" size={22} color="#333" />
-    </TouchableOpacity>
+    <View style={styles.roomChip}>
+      <Text style={styles.roomChipText}>Room #{roomId}</Text>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  roomChip: {
+    backgroundColor: colors.brandLight,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  roomChipText: {
+    color: colors.brand,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+});
