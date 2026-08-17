@@ -76,6 +76,10 @@ export default function SplitsScreen() {
   const shareRef = useRef<ViewShot>(null);
 
   const computed: ComputedSplits | null = splitsData ? computeSplitsFiltered(splitsData, {}) : null;
+  const profileByEmail: Record<string, string | null> = {};
+  computed?.memberBalances.forEach((mb) => {
+    profileByEmail[mb.member.user_email] = mb.member.profile;
+  });
 
   const loadSplits = useCallback(
     async (isRefresh = false) => {
@@ -233,15 +237,40 @@ export default function SplitsScreen() {
             {computed.settlements.length > 0 && (
               <View style={styles.whoPaysSection}>
                 <Text style={styles.whoPaysHeading}>Who Pays Whom</Text>
-                {computed.settlements.map((s, idx) => (
-                  <View key={`${s.from_user_email}-${s.to_user_email}-${idx}`} style={styles.whoPaysCard}>
-                    <Text style={styles.whoPaysName}>{s.from_name || s.from_user_email}</Text>
-                    <Text style={styles.whoPaysVerb}>pays</Text>
-                    <Text style={styles.whoPaysName}>{s.to_name || s.to_user_email}</Text>
-                    <View style={{ flex: 1 }} />
-                    <Text style={styles.whoPaysAmount}>{formatAmount(s.amount)}</Text>
-                  </View>
-                ))}
+                {computed.settlements.map((s, idx) => {
+                  const fromProfile = profileByEmail[s.from_user_email];
+                  const toProfile = profileByEmail[s.to_user_email];
+                  const fromLabel = s.from_name || s.from_user_email;
+                  const toLabel = s.to_name || s.to_user_email;
+                  const fromFirstName = fromLabel.split(' ')[0];
+                  const toFirstName = toLabel.split(' ')[0];
+
+                  return (
+                    <View key={`${s.from_user_email}-${s.to_user_email}-${idx}`} style={styles.whoPaysCard}>
+                      <Avatar
+                        uri={fromProfile}
+                        label={fromLabel}
+                        size={28}
+                        fontSize={12}
+                        backgroundColor={colors.purpleAvatar}
+                        textColor={colors.textSecondary}
+                      />
+                      <Text style={styles.whoPaysName}>{fromFirstName}</Text>
+                      <Ionicons name="arrow-forward" size={14} color="#888" />
+                      <Avatar
+                        uri={toProfile}
+                        label={toLabel}
+                        size={28}
+                        fontSize={12}
+                        backgroundColor={colors.purpleAvatar}
+                        textColor={colors.textSecondary}
+                      />
+                      <Text style={styles.whoPaysName}>{toFirstName}</Text>
+                      <View style={{ flex: 1 }} />
+                      <Text style={styles.whoPaysAmount}>{formatAmount(s.amount)}</Text>
+                    </View>
+                  );
+                })}
               </View>
             )}
 
@@ -355,7 +384,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   whoPaysName: { fontSize: 14, fontWeight: '600', color: '#333' },
-  whoPaysVerb: { fontSize: 14, color: '#888' },
   whoPaysAmount: { fontSize: 14, fontWeight: '700', color: colors.brandDark },
   actionsRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
   shareButton: {
