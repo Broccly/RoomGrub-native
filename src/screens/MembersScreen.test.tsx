@@ -20,14 +20,14 @@ describe('MembersScreen', () => {
     mockedApi.listMembers.mockResolvedValue(mockMembers);
   });
 
-  it('lists members with their role badges', async () => {
+  it('lists members, showing a role badge only for admins', async () => {
     mockedUseUserRole.mockReturnValue({ role: 'Member', loading: false });
     renderWithProviders(<MembersScreen navigation={makeNavigationMock()} route={route} />);
 
     await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
     expect(screen.getByText('Bob')).toBeTruthy();
     expect(screen.getByText('Admin')).toBeTruthy();
-    expect(screen.getByText('Member')).toBeTruthy();
+    expect(screen.queryByText('Member')).toBeNull();
   });
 
   it('shows Edit actions only for admins', async () => {

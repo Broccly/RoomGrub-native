@@ -85,7 +85,7 @@ export default function MembersScreen({ navigation, route }: any) {
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadMembers(true)} />}
       >
-        <Text style={styles.heading}>Room Members</Text>
+        <Text style={styles.heading}>Friends</Text>
 
         {members.length === 0 ? (
           <Text style={styles.emptyText}>No friends added in your room.</Text>
@@ -115,18 +115,12 @@ export default function MembersScreen({ navigation, route }: any) {
               <View style={styles.memberInfo}>
                 <View style={styles.nameRow}>
                   <Text style={styles.memberName}>{member.name || member.email}</Text>
-                  <View
-                    style={[
-                      styles.roleBadge,
-                      member.role === 'Admin'
-                        ? styles.adminBadge
-                        : styles.memberBadge,
-                    ]}
-                  >
-                    <Text style={styles.roleBadgeText}>{member.role}</Text>
-                  </View>
+                  {member.role === 'Admin' && (
+                    <View style={[styles.roleBadge, styles.adminBadge]}>
+                      <Text style={styles.roleBadgeText}>{member.role}</Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={styles.memberEmail}>{member.email}</Text>
               </View>
               {!roleLoading && role === 'Admin' && (
                 <TouchableOpacity
@@ -205,15 +199,15 @@ const styles = StyleSheet.create({
   memberCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#3a3a3a',
     borderRadius: 12,
     padding: 14,
-    marginBottom: 10,
-    elevation: 1,
+    marginBottom: 18,
+    elevation: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
   },
   avatarFallback: {
     width: 48,
@@ -221,7 +215,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: '#ede9fe',
     borderWidth: 2,
-    borderColor: '#c4b5fd',
+    borderColor: '#3a3a3a',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -229,12 +223,10 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 20, fontWeight: '700', color: '#9333ea' },
   memberInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
-  memberName: { fontSize: 16, fontWeight: '600', color: '#333' },
+  memberName: { fontSize: 16, fontWeight: '600', color: '#fff' },
   roleBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
   adminBadge: { backgroundColor: '#e0e7ff' },
-  memberBadge: { backgroundColor: '#f3f4f6' },
   roleBadgeText: { fontSize: 11, fontWeight: '500', color: '#555' },
-  memberEmail: { fontSize: 13, color: '#888' },
   editBtn: { padding: 8 },
   editBtnText: { fontSize: 13, color: '#9333ea', fontWeight: '600' },
   addButton: {
