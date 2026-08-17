@@ -29,14 +29,14 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Bob')).toBeTruthy();
   });
 
-  it('navigates to Members when a member row is pressed', async () => {
+  it('navigates to MemberDetail when a member row is pressed', async () => {
     const navigation = makeNavigationMock();
     renderWithProviders(<HomeScreen navigation={navigation} />);
 
     await waitFor(() => expect(screen.getByText('Bob')).toBeTruthy());
     fireEvent.press(screen.getByText('Bob'));
 
-    expect(navigation.navigate).toHaveBeenCalledWith('Members');
+    expect(navigation.navigate).toHaveBeenCalledWith('MemberDetail', { room_id: 10, member_id: 2 });
   });
 
   it('silently ignores dashboard load failures', async () => {

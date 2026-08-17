@@ -102,11 +102,11 @@ export default function HomeScreen({ navigation }: any) {
       {members.length > 0 && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Member Summary</Text>
-          {members.map((member) => {
+          {members.map((member, index) => {
             const isPending = member.pending_amount > 0;
             return (
               <TouchableOpacity
-                key={member.email}
+                key={member.user_id ?? member.email ?? index}
                 style={[
                   styles.memberRow,
                   {
