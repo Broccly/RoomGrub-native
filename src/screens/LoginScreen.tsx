@@ -7,9 +7,11 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useIdTokenAuthRequest } from 'expo-auth-session/providers/google';
+import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../hooks/useAuth';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -24,6 +26,8 @@ if (Platform.OS !== 'web') {
 
 export default function LoginScreen({ navigation }: any) {
   const { login, isAuthenticated } = useAuth();
+  const { width: windowWidth } = useWindowDimensions();
+  const taglineFontSize = Math.min(Math.max(windowWidth * 0.036, 11), 16);
 
   const [, response, promptAsync] = useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
@@ -88,36 +92,39 @@ export default function LoginScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
+      <View style={styles.heroWrap}>
         <Image
-          source={require('../../assets/logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
+          source={require('../../assets/login-girl.png')}
+          style={styles.hero}
+          resizeMode="cover"
         />
-
-        <Text style={styles.tagline}>Split Bills, Share Easy</Text>
-        <Text style={styles.subtitle}>Track expenses with your roommates</Text>
-        <Text style={styles.hint}>Perfect for bachelors sharing expenses</Text>
-
-        <TouchableOpacity
-          style={styles.googleButton}
-          onPress={signInWithGoogle}
-        >
-          <GoogleIcon />
-          <Text style={styles.googleButtonText}>Login with Google</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.bottomTagline}>
-          Smart sharing, stress free living
-        </Text>
+        <View style={styles.heroCut} />
+        <View style={styles.logoBadge}>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
       </View>
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Made by Broccly</Text>
-        <Image
-          source={require('../../assets/broccly.png')}
-          style={styles.brocclyLogo}
-        />
+      <View style={styles.content}>
+        <TouchableOpacity
+          onPress={signInWithGoogle}
+          activeOpacity={0.85}
+          style={[styles.googleButtonShadow, styles.googleButton]}
+        >
+          <GoogleIcon />
+          <Text style={styles.googleButtonText}>Continue with Google</Text>
+        </TouchableOpacity>
+
+        <Text
+          style={[styles.bottomTagline, { fontSize: taglineFontSize }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          Smart sharing, stress free living
+        </Text>
       </View>
     </View>
   );
@@ -125,9 +132,24 @@ export default function LoginScreen({ navigation }: any) {
 
 function GoogleIcon() {
   return (
-    <View style={styles.googleIcon}>
-      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4285F4' }}>G</Text>
-    </View>
+    <Svg width={20} height={20} viewBox="0 0 18 18" style={styles.googleIcon}>
+      <Path
+        fill="#4285F4"
+        d="M17.64 9.2045c0-.6381-.0573-1.2518-.1636-1.8409H9v3.4818h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9087c1.7018-1.5668 2.6836-3.8741 2.6836-6.6154z"
+      />
+      <Path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.4673-.8064 5.9564-2.1818l-2.9087-2.2581c-.8064.54-1.8368.8618-3.0477.8618-2.3436 0-4.3282-1.5818-5.0359-3.7104H.9573v2.3318C2.4382 15.9832 5.4818 18 9 18z"
+      />
+      <Path
+        fill="#FBBC05"
+        d="M3.9641 10.71c-.18-.54-.2823-1.1159-.2823-1.71s.1023-1.17.2823-1.71V4.9582H.9573C.3477 6.1732 0 7.5477 0 9s.3477 2.8268.9573 4.0418L3.9641 10.71z"
+      />
+      <Path
+        fill="#EA4335"
+        d="M9 3.5782c1.3214 0 2.5077.4541 3.4405 1.3459l2.5818-2.5818C13.4632.8918 11.4259 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9582L3.9641 7.29C4.6718 5.1618 6.6564 3.5782 9 3.5782z"
+      />
+    </Svg>
   );
 }
 
@@ -135,81 +157,72 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#faf5ff',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  content: {
-    alignItems: 'center',
-    paddingHorizontal: 32,
+  heroWrap: {
+    width: '100%',
+    height: '70%',
+    position: 'relative',
+    backgroundColor: '#ede9fe',
+    overflow: 'hidden',
+  },
+  hero: {
+    width: '100%',
+    height: '100%',
+  },
+  heroCut: {
+    position: 'absolute',
+    left: -40,
+    right: -40,
+    bottom: -60,
+    height: 100,
+    backgroundColor: '#faf5ff',
+    transform: [{ rotate: '-4deg' }],
+  },
+  logoBadge: {
+    position: 'absolute',
+    top: 20,
+    left: 10,
   },
   logo: {
-    width: 180,
-    height: 90,
-    marginBottom: 16,
+    width: 84,
+    height: 84,
   },
-  tagline: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#9333ea',
-    marginBottom: 8,
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingTop: 28,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 4,
-  },
-  hint: {
-    fontSize: 13,
-    color: '#706e6e',
-    marginBottom: 32,
+  googleButtonShadow: {
+    width: '100%',
+    borderRadius: 999,
+    marginBottom: 28,
   },
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 12,
+    paddingVertical: 15,
     borderRadius: 999,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    marginBottom: 24,
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#000000',
   },
   googleIcon: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
+    marginRight: 12,
   },
   googleButtonText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#000',
+    color: '#000000',
   },
   bottomTagline: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#706e6e',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    opacity: 0.8,
-  },
-  footerText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: 'gray',
-  },
-  brocclyLogo: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    fontWeight: '700',
+    color: '#000000',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginTop: 'auto',
+    marginBottom: 24,
   },
 });
