@@ -13,10 +13,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import CrossPlatformDatePicker, { CrossPlatformDatePickerHandle } from '../components/CrossPlatformDatePicker';
 import useUserRole from '../hooks/useUserRole';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../services/api';
+import { queryKeys } from '../services/queryClient';
 import { UserSummary } from '../types/api';
 import { colors } from '../theme/colors';
 import Avatar from '../components/Avatar';
@@ -242,15 +244,19 @@ export default function AddGroceryScreen({ route }: any) {
   const room_id = Number(route.params.room_id);
   const { role } = useUserRole();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const [members, setMembers] = useState<UserSummary[]>([]);
-  const [membersLoading, setMembersLoading] = useState(true);
+  const membersQuery = useQuery({
+    queryKey: queryKeys.members(room_id),
+    queryFn: () => api.listMembers(room_id),
+  });
+  const members = membersQuery.data ?? [];
+  const membersLoading = membersQuery.isPending;
 
   const [grocery, setGrocery] = useState('');
   const [price, setPrice] = useState('');
   const [date, setDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [participantIds, setParticipantIds] = useState<number[]>([]);
   const [showParticipantPicker, setShowParticipantPicker] = useState(false);
@@ -261,7 +267,6 @@ export default function AddGroceryScreen({ route }: any) {
   const [friendPrice, setFriendPrice] = useState('');
   const [friendDate, setFriendDate] = useState<Date | null>(null);
   const [showFriendDatePicker, setShowFriendDatePicker] = useState(false);
-  const [friendLoading, setFriendLoading] = useState(false);
   const [friendMsg, setFriendMsg] = useState('');
   const [friendParticipantIds, setFriendParticipantIds] = useState<number[]>([]);
   const [showFriendParticipantPicker, setShowFriendParticipantPicker] = useState(false);
@@ -270,16 +275,63 @@ export default function AddGroceryScreen({ route }: any) {
   const friendDatePickerRef = useRef<CrossPlatformDatePickerHandle>(null);
 
   useEffect(() => {
-    api
-      .listMembers(room_id)
-      .then((data) => {
-        setMembers(data);
-        const allIds = data.map((m) => m.user_id);
-        setParticipantIds(allIds);
-        setFriendParticipantIds(allIds);
-      })
-      .finally(() => setMembersLoading(false));
-  }, [room_id]);
+    if (!members.length) return;
+    const allIds = members.map((m) => m.user_id);
+    setParticipantIds(allIds);
+    setFriendParticipantIds(allIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [membersQuery.data]);
+
+  const invalidateExpenseData = () => {
+    queryClient.invalidateQueries({ queryKey: ['room', room_id, 'expenses'] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.roomDashboard(room_id) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.roomSummary(room_id) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.splits(room_id) });
+  };
+
+  const addExpenseMutation = useMutation({
+    mutationFn: (payload: { material: string; money: number; created_at?: string; participant_user_ids: number[] }) =>
+      api.createExpense(room_id, payload),
+    onSuccess: () => {
+      invalidateExpenseData();
+      setMsg('✅ Grocery added!');
+      setGrocery('');
+      setPrice('');
+      setDate(null);
+    },
+    onError: (error) => {
+      setMsg(`❌ ${error instanceof Error ? error.message : 'Failed to add grocery'}`);
+    },
+  });
+
+  const addExpenseForMemberMutation = useMutation({
+    mutationFn: (payload: {
+      user_id: number;
+      material: string;
+      money: number;
+      created_at?: string;
+      participant_user_ids: number[];
+    }) => api.createExpenseForMember(room_id, payload),
+    onSuccess: (_data, variables) => {
+      invalidateExpenseData();
+      const friend = members.find((m) => m.user_id === variables.user_id);
+      setFriendMsg(`✅ Added for ${friend?.name || friend?.email}`);
+      setSelectedFriend(null);
+      setFriendGrocery('');
+      setFriendPrice('');
+      setFriendDate(null);
+      setTimeout(() => {
+        setShowFriendModal(false);
+        setFriendMsg('');
+      }, 1000);
+    },
+    onError: (error) => {
+      setFriendMsg(`❌ ${error instanceof Error ? error.message : 'Failed to add grocery'}`);
+    },
+  });
+
+  const loading = addExpenseMutation.isPending;
+  const friendLoading = addExpenseForMemberMutation.isPending;
 
   const toggleParticipant = (userId: number) => {
     if (userId === user?.id) return;
@@ -295,7 +347,7 @@ export default function AddGroceryScreen({ route }: any) {
     );
   };
 
-  const handleAdd = async () => {
+  const handleAdd = () => {
     setMsg('');
     const numericPrice = Number(price);
 
@@ -308,26 +360,15 @@ export default function AddGroceryScreen({ route }: any) {
       return;
     }
 
-    setLoading(true);
-    try {
-      await api.createExpense(room_id, {
-        material: grocery.trim(),
-        money: numericPrice,
-        created_at: date ? date.toISOString().split('T')[0] : undefined,
-        participant_user_ids: participantIds,
-      });
-      setMsg('✅ Grocery added!');
-      setGrocery('');
-      setPrice('');
-      setDate(null);
-    } catch (error) {
-      setMsg(`❌ ${error instanceof Error ? error.message : 'Failed to add grocery'}`);
-    } finally {
-      setLoading(false);
-    }
+    addExpenseMutation.mutate({
+      material: grocery.trim(),
+      money: numericPrice,
+      created_at: date ? date.toISOString().split('T')[0] : undefined,
+      participant_user_ids: participantIds,
+    });
   };
 
-  const handleAddForFriend = async () => {
+  const handleAddForFriend = () => {
     setFriendMsg('');
     const numericPrice = Number(friendPrice);
 
@@ -344,29 +385,13 @@ export default function AddGroceryScreen({ route }: any) {
       return;
     }
 
-    setFriendLoading(true);
-    try {
-      await api.createExpenseForMember(room_id, {
-        user_id: selectedFriend.user_id,
-        material: friendGrocery.trim(),
-        money: numericPrice,
-        created_at: friendDate ? friendDate.toISOString().split('T')[0] : undefined,
-        participant_user_ids: friendParticipantIds,
-      });
-      setFriendMsg(`✅ Added for ${selectedFriend.name || selectedFriend.email}`);
-      setSelectedFriend(null);
-      setFriendGrocery('');
-      setFriendPrice('');
-      setFriendDate(null);
-      setTimeout(() => {
-        setShowFriendModal(false);
-        setFriendMsg('');
-      }, 1000);
-    } catch (error) {
-      setFriendMsg(`❌ ${error instanceof Error ? error.message : 'Failed to add grocery'}`);
-    } finally {
-      setFriendLoading(false);
-    }
+    addExpenseForMemberMutation.mutate({
+      user_id: selectedFriend.user_id,
+      material: friendGrocery.trim(),
+      money: numericPrice,
+      created_at: friendDate ? friendDate.toISOString().split('T')[0] : undefined,
+      participant_user_ids: friendParticipantIds,
+    });
   };
 
   if (membersLoading) {

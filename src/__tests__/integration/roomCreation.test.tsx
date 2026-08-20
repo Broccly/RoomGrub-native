@@ -2,11 +2,13 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { QueryClientProvider } from '@tanstack/react-query';
 import RoomsListScreen from '../../screens/RoomsListScreen';
 import CreateRoomScreen from '../../screens/CreateRoomScreen';
 import { useAuth } from '../../hooks/useAuth';
 import { api } from '../../services/api';
 import { mockMembers, mockRoom } from '../../test-utils/fixtures';
+import { createTestQueryClient } from '../../test-utils/renderWithProviders';
 
 // Exercises real cross-screen navigation and RoomsListScreen/CreateRoomScreen
 // wiring together; only the network boundary (api.ts) is mocked.
@@ -19,13 +21,15 @@ const Stack = createNativeStackNavigator();
 
 function renderApp() {
   return render(
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="RoomsList">
-        <Stack.Screen name="RoomsList" component={RoomsListScreen} />
-        <Stack.Screen name="CreateRoom" component={CreateRoomScreen} />
-        <Stack.Screen name="RoomHome">{() => null}</Stack.Screen>
-      </Stack.Navigator>
-    </NavigationContainer>,
+    <QueryClientProvider client={createTestQueryClient()}>
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName="RoomsList">
+          <Stack.Screen name="RoomsList" component={RoomsListScreen} />
+          <Stack.Screen name="CreateRoom" component={CreateRoomScreen} />
+          <Stack.Screen name="RoomHome">{() => null}</Stack.Screen>
+        </Stack.Navigator>
+      </NavigationContainer>
+    </QueryClientProvider>,
   );
 }
 

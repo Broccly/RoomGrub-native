@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { colors } from '../theme/colors';
 import { useRoomContext } from '../context/RoomContext';
@@ -17,23 +18,24 @@ const INVITE_WEB_BASE = 'https://roomgrub.broccly.in';
 
 export default function InviteMemberScreen() {
   const { roomId } = useRoomContext();
-  const [loading, setLoading] = useState(false);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const [daysLeft, setDaysLeft] = useState<number | null>(null);
 
-  const handleGenerateLink = async () => {
-    if (!roomId) return;
-    setLoading(true);
-    try {
-      const result = await api.createInvite(roomId);
-      setInviteLink(`${INVITE_WEB_BASE}/invite/${result.token}`);
-      setDaysLeft(result.days_left);
-    } catch (error) {
+  const generateLinkMutation = useMutation({
+    mutationFn: () => api.createInvite(roomId!),
+    onError: (error) => {
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create invite');
-    } finally {
-      setLoading(false);
-    }
+    },
+  });
+
+  const handleGenerateLink = () => {
+    if (!roomId) return;
+    generateLinkMutation.mutate();
   };
+
+  const inviteLink = generateLinkMutation.data
+    ? `${INVITE_WEB_BASE}/invite/${generateLinkMutation.data.token}`
+    : null;
+  const daysLeft = generateLinkMutation.data?.days_left ?? null;
+  const loading = generateLinkMutation.isPending;
 
   const handleShare = async () => {
     if (!inviteLink) return;

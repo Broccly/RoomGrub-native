@@ -1,10 +1,12 @@
 import React from 'react';
 import { renderHook, waitFor } from '@testing-library/react-native';
+import { QueryClientProvider } from '@tanstack/react-query';
 import useUserRole from './useUserRole';
 import { useAuth } from './useAuth';
 import { api } from '../services/api';
 import { RoomProvider } from '../context/RoomContext';
 import { mockMembers } from '../test-utils/fixtures';
+import { createTestQueryClient } from '../test-utils/renderWithProviders';
 
 jest.mock('./useAuth');
 jest.mock('../services/api');
@@ -13,7 +15,11 @@ const mockedUseAuth = useAuth as jest.Mock;
 const mockedApi = api as jest.Mocked<typeof api>;
 
 function wrapper({ children }: { children: React.ReactNode }) {
-  return <RoomProvider initialRoomId={10}>{children}</RoomProvider>;
+  return (
+    <QueryClientProvider client={createTestQueryClient()}>
+      <RoomProvider initialRoomId={10}>{children}</RoomProvider>
+    </QueryClientProvider>
+  );
 }
 
 describe('useUserRole', () => {

@@ -2,12 +2,14 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { TouchableOpacity, Text } from 'react-native';
 import ExpensesScreen from '../../screens/ExpensesScreen';
 import AddGroceryScreen from '../../screens/AddGroceryScreen';
 import useUserRole from '../../hooks/useUserRole';
 import { api } from '../../services/api';
 import { mockMembers, mockPaginatedExpenses } from '../../test-utils/fixtures';
+import { createTestQueryClient } from '../../test-utils/renderWithProviders';
 
 // Exercises real push/back navigation between ExpensesScreen and AddGroceryScreen:
 // creating an expense, going back, and confirming ExpensesScreen's
@@ -33,12 +35,14 @@ function GoToAddGroceryButton({ navigation }: any) {
 
 function renderApp() {
   return render(
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Expenses">
-        <Stack.Screen name="Expenses" component={GoToAddGroceryButton} />
-        <Stack.Screen name="AddGrocery" component={AddGroceryScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>,
+    <QueryClientProvider client={createTestQueryClient()}>
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName="Expenses">
+          <Stack.Screen name="Expenses" component={GoToAddGroceryButton} />
+          <Stack.Screen name="AddGrocery" component={AddGroceryScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </QueryClientProvider>,
   );
 }
 

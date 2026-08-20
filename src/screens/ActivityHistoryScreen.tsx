@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,12 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import CrossPlatformDatePicker, { CrossPlatformDatePickerHandle } from '../components/CrossPlatformDatePicker';
 import useUserRole from '../hooks/useUserRole';
 import { api } from '../services/api';
-import { ExpenseItem, UserSummary } from '../types/api';
+import { queryKeys } from '../services/queryClient';
+import { ExpenseItem } from '../types/api';
 import { formatAmount, formatShortDate } from '../utils/format';
 import { colors } from '../theme/colors';
 import { showAlert } from '../utils/alert';
@@ -25,53 +26,72 @@ function sanitizeAmountInput(text: string): string {
   return text.replace(/[^0-9.]/g, '');
 }
 
+const ACTIVITY_FILTERS = { settled: 'false', limit: 100 };
+
 export default function ActivityHistoryScreen({ route }: any) {
   const room_id = Number(route.params.room_id);
   const { role } = useUserRole();
   const isAdmin = role === 'Admin';
+  const queryClient = useQueryClient();
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
-  const [members, setMembers] = useState<UserSummary[]>([]);
+  const expensesQuery = useQuery({
+    queryKey: queryKeys.expenses(room_id, ACTIVITY_FILTERS),
+    queryFn: () => api.listExpenses(room_id, ACTIVITY_FILTERS),
+  });
+  const membersQuery = useQuery({
+    queryKey: queryKeys.members(room_id),
+    queryFn: () => api.listMembers(room_id),
+  });
+  const expenses = expensesQuery.data?.items ?? [];
+  const members = membersQuery.data ?? [];
+  const loading = expensesQuery.isPending || membersQuery.isPending;
+  const refreshing = (expensesQuery.isFetching || membersQuery.isFetching) && !loading;
+
+  const handleRefresh = () => {
+    expensesQuery.refetch();
+    membersQuery.refetch();
+  };
 
   const [editing, setEditing] = useState<ExpenseItem | null>(null);
   const [editMaterial, setEditMaterial] = useState('');
   const [editMoney, setEditMoney] = useState('');
   const [editDate, setEditDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const datePickerRef = useRef<CrossPlatformDatePickerHandle>(null);
 
-  const load = useCallback(
-    async (isRefresh = false) => {
-      if (!room_id) return;
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
+  const invalidateExpenseData = () => {
+    queryClient.invalidateQueries({ queryKey: ['room', room_id, 'expenses'] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.roomDashboard(room_id) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.roomSummary(room_id) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.splits(room_id) });
+  };
 
-      try {
-        const [expensesData, membersData] = await Promise.all([
-          api.listExpenses(room_id, { settled: 'false', limit: 100 }),
-          api.listMembers(room_id),
-        ]);
-        setExpenses(expensesData.items);
-        setMembers(membersData);
-      } catch (error) {
-        showAlert('Error', error instanceof Error ? error.message : 'Failed to load activity');
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
+  const updateExpenseMutation = useMutation({
+    mutationFn: (payload: { expenseId: number; material: string; money: number; created_at: string }) =>
+      api.updateExpense(room_id, payload.expenseId, {
+        material: payload.material,
+        money: payload.money,
+        created_at: payload.created_at,
+      }),
+    onSuccess: () => {
+      invalidateExpenseData();
+      closeEdit();
     },
-    [room_id],
-  );
+    onError: (error) => {
+      setEditError(error instanceof Error ? error.message : 'Failed to update activity');
+    },
+  });
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load])
-  );
+  const deleteExpenseMutation = useMutation({
+    mutationFn: (expenseId: number) => api.deleteExpense(room_id, expenseId),
+    onSuccess: invalidateExpenseData,
+    onError: (error) => {
+      showAlert('Error', error instanceof Error ? error.message : 'Failed to delete activity');
+    },
+  });
+
+  const saving = updateExpenseMutation.isPending;
 
   const memberNameByEmail = useMemo(() => {
     const map: Record<string, string> = {};
@@ -99,11 +119,10 @@ export default function ActivityHistoryScreen({ route }: any) {
 
   const closeEdit = () => {
     setEditing(null);
-    setSaving(false);
     setEditError('');
   };
 
-  const saveEdit = async () => {
+  const saveEdit = () => {
     if (!editing) return;
     const numericMoney = Number(editMoney);
 
@@ -112,20 +131,13 @@ export default function ActivityHistoryScreen({ route }: any) {
       return;
     }
 
-    setSaving(true);
     setEditError('');
-    try {
-      await api.updateExpense(room_id, editing.id, {
-        material: editMaterial.trim(),
-        money: numericMoney,
-        created_at: editDate.toISOString().split('T')[0],
-      });
-      closeEdit();
-      await load(true);
-    } catch (error) {
-      setEditError(error instanceof Error ? error.message : 'Failed to update activity');
-      setSaving(false);
-    }
+    updateExpenseMutation.mutate({
+      expenseId: editing.id,
+      material: editMaterial.trim(),
+      money: numericMoney,
+      created_at: editDate.toISOString().split('T')[0],
+    });
   };
 
   const confirmDelete = (expense: ExpenseItem) => {
@@ -138,14 +150,7 @@ export default function ActivityHistoryScreen({ route }: any) {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.deleteExpense(room_id, expense.id);
-              await load(true);
-            } catch (error) {
-              showAlert('Error', error instanceof Error ? error.message : 'Failed to delete activity');
-            }
-          },
+          onPress: () => deleteExpenseMutation.mutate(expense.id),
         },
       ],
     );
@@ -208,7 +213,7 @@ export default function ActivityHistoryScreen({ route }: any) {
         renderItem={renderItem}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ padding: 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No pending expenses found</Text>

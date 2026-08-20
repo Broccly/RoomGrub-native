@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,10 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import useUserRole from '../hooks/useUserRole';
 import { api } from '../services/api';
+import { queryKeys } from '../services/queryClient';
 import { UserSummary } from '../types/api';
 import Avatar from '../components/Avatar';
 import { showAlert } from '../utils/alert';
@@ -19,34 +20,29 @@ import { showAlert } from '../utils/alert';
 export default function MembersScreen({ navigation, route }: any) {
   const room_id = Number(route.params.room_id);
   const { role, loading: roleLoading } = useUserRole();
-  const [members, setMembers] = useState<UserSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
   const [editModal, setEditModal] = useState<{ open: boolean; member: UserSummary | null }>({
     open: false,
     member: null,
   });
 
-  const loadMembers = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+  const membersQuery = useQuery({
+    queryKey: queryKeys.members(room_id),
+    queryFn: () => api.listMembers(room_id),
+  });
+  const members = membersQuery.data ?? [];
 
-    try {
-      const result = await api.listMembers(room_id);
-      setMembers(result);
-    } catch (error) {
-      showAlert('Error', error instanceof Error ? error.message : 'Failed to load members');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [room_id]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadMembers();
-    }, [loadMembers])
-  );
+  const roleMutation = useMutation({
+    mutationFn: ({ memberId, newRole }: { memberId: number; newRole: 'Admin' | 'Member' }) =>
+      api.updateMemberRole(room_id, memberId, newRole),
+    onSuccess: () => {
+      setEditModal({ open: false, member: null });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members(room_id) });
+    },
+    onError: (error) => {
+      showAlert('Error', error instanceof Error ? error.message : 'Failed to update role');
+    },
+  });
 
   const handleRoleChange = async (newRole: 'Admin' | 'Member') => {
     if (!editModal.member) return;
@@ -59,20 +55,12 @@ export default function MembersScreen({ navigation, route }: any) {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'OK',
-        onPress: async () => {
-          try {
-            await api.updateMemberRole(room_id, editModal.member!.user_id, newRole);
-            setEditModal({ open: false, member: null });
-            loadMembers(true);
-          } catch (error) {
-            showAlert('Error', error instanceof Error ? error.message : 'Failed to update role');
-          }
-        },
+        onPress: () => roleMutation.mutate({ memberId: editModal.member!.user_id, newRole }),
       },
     ]);
   };
 
-  if (loading) {
+  if (membersQuery.isPending) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color="#9333ea" />
@@ -83,7 +71,12 @@ export default function MembersScreen({ navigation, route }: any) {
   return (
     <View style={styles.container}>
       <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadMembers(true)} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={membersQuery.isFetching && !membersQuery.isPending}
+            onRefresh={() => membersQuery.refetch()}
+          />
+        }
       >
         <Text style={styles.heading}>Friends</Text>
 

@@ -1,41 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 import { formatCurrency, formatDate } from '../utils/format';
 import { api } from '../services/api';
-import { MemberDetail } from '../types/api';
+import { queryKeys } from '../services/queryClient';
 import { useRoomContext } from '../context/RoomContext';
 
 export default function MemberDetailScreen({ route }: any) {
   const { roomId } = useRoomContext();
   const member_id = Number(route.params.member_id);
-  const [data, setData] = useState<MemberDetail | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  const loadMember = async () => {
-    if (!roomId) return;
-    setLoading(true);
-    try {
-      const result = await api.getMemberDetail(roomId, member_id);
-      setData(result);
-    } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load member');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, isPending } = useQuery({
+    queryKey: roomId ? queryKeys.memberDetail(roomId, member_id) : ['member-detail', 'disabled'],
+    queryFn: () => api.getMemberDetail(roomId!, member_id),
+    enabled: !!roomId,
+  });
 
-  useEffect(() => {
-    loadMember();
-  }, [roomId, member_id]);
-
-  if (loading || !data) {
+  if (isPending || !data) {
     return (
       <View style={[styles.center, { backgroundColor: '#faf5ff' }]}>
         <ActivityIndicator size="large" color="#9333ea" />

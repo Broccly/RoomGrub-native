@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -8,53 +8,46 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useQueries } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { useRoomContext } from '../context/RoomContext';
 import { api } from '../services/api';
+import { queryKeys } from '../services/queryClient';
 import { colors } from '../theme/colors';
 import { formatAmount } from '../utils/format';
-import { MemberStat, RoomSummary } from '../types/api';
 import Avatar from '../components/Avatar';
 
 export default function HomeScreen({ navigation }: any) {
   const { user } = useAuth();
   const { roomId } = useRoomContext();
 
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [roomSummary, setRoomSummary] = useState<RoomSummary | null>(null);
-  const [members, setMembers] = useState<MemberStat[]>([]);
-
   const firstName = (user?.name || user?.email || 'there').split(' ')[0];
 
-  const loadDashboard = useCallback(async (isRefresh = false) => {
-    if (!roomId) return;
+  const [summaryQuery, dashboardQuery] = useQueries({
+    queries: [
+      {
+        queryKey: roomId ? queryKeys.roomSummary(roomId) : ['room-summary', 'disabled'],
+        queryFn: () => api.getRoomSummary(roomId!),
+        enabled: !!roomId,
+      },
+      {
+        queryKey: roomId ? queryKeys.roomDashboard(roomId) : ['room-dashboard', 'disabled'],
+        queryFn: () => api.getRoomDashboard(roomId!),
+        enabled: !!roomId,
+      },
+    ],
+  });
 
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+  const roomSummary = summaryQuery.data ?? null;
+  const members = dashboardQuery.data?.members ?? [];
+  const loading = summaryQuery.isPending || dashboardQuery.isPending;
+  const refreshing = (summaryQuery.isFetching || dashboardQuery.isFetching) && !loading;
 
-    try {
-      const [summary, dashboard] = await Promise.all([
-        api.getRoomSummary(roomId),
-        api.getRoomDashboard(roomId),
-      ]);
-      setRoomSummary(summary);
-      setMembers(dashboard.members);
-    } catch {
-      // silently fail — screens are still navigable via tabs
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [roomId]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadDashboard();
-    }, [loadDashboard])
-  );
+  const handleRefresh = () => {
+    summaryQuery.refetch();
+    dashboardQuery.refetch();
+  };
 
   if (loading && !roomSummary) {
     return (
@@ -68,7 +61,7 @@ export default function HomeScreen({ navigation }: any) {
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadDashboard(true)} tintColor={colors.brand} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} />}
     >
       {/* Greeting */}
       <View style={styles.greeting}>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,12 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../hooks/useAuth';
 import useUserRole from '../hooks/useUserRole';
 import { useRoomContext } from '../context/RoomContext';
 import { api } from '../services/api';
+import { queryKeys } from '../services/queryClient';
 import { colors } from '../theme/colors';
 import { showAlert } from '../utils/alert';
 
@@ -18,13 +20,54 @@ export default function SettingsScreen({ navigation, route }: any) {
   const { logout } = useAuth();
   const { role } = useUserRole();
   const { setRoomId } = useRoomContext();
+  const queryClient = useQueryClient();
   const room_id = Number(route.params?.room_id);
-  const [deleting, setDeleting] = useState(false);
 
   const handleSignOut = async () => {
     await logout();
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
+
+  const exitRoomMutation = useMutation({
+    mutationFn: () => api.exitRoom(room_id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.rooms });
+      setRoomId(null);
+      navigation.reset({ index: 0, routes: [{ name: 'RoomsList' }] });
+    },
+    onError: (error) => {
+      showAlert('Error', error instanceof Error ? error.message : 'Failed to exit room');
+    },
+  });
+
+  const deleteRoomMutation = useMutation({
+    mutationFn: () => api.deleteRoom(room_id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.rooms });
+      setRoomId(null);
+      navigation.reset({ index: 0, routes: [{ name: 'RoomsList' }] });
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'Failed to delete room';
+      if (message.toLowerCase().includes('unsettled')) {
+        showAlert(
+          'Unsettled Balances',
+          'This room has unsettled balances. Please settle all balances before deleting the room.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Go to Splits',
+              onPress: () => navigation.navigate('RoomHome', { room_id, screen: 'Splits' }),
+            },
+          ],
+        );
+      } else {
+        showAlert('Error', message);
+      }
+    },
+  });
+
+  const deleting = exitRoomMutation.isPending || deleteRoomMutation.isPending;
 
   const handleExitRoom = () => {
     showAlert(
@@ -32,21 +75,7 @@ export default function SettingsScreen({ navigation, route }: any) {
       'Are you sure you want to exit this room? You will need to join a new room.',
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Exit',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              await api.exitRoom(room_id);
-              setRoomId(null);
-              navigation.reset({ index: 0, routes: [{ name: 'RoomsList' }] });
-            } catch (error) {
-              showAlert('Error', error instanceof Error ? error.message : 'Failed to exit room');
-              setDeleting(false);
-            }
-          },
-        },
+        { text: 'Exit', style: 'destructive', onPress: () => exitRoomMutation.mutate() },
       ],
     );
   };
@@ -57,36 +86,7 @@ export default function SettingsScreen({ navigation, route }: any) {
       'Are you absolutely sure? This will permanently delete the room and all its data. This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              await api.deleteRoom(room_id);
-              setRoomId(null);
-              navigation.reset({ index: 0, routes: [{ name: 'RoomsList' }] });
-            } catch (error) {
-              const message = error instanceof Error ? error.message : 'Failed to delete room';
-              if (message.toLowerCase().includes('unsettled')) {
-                showAlert(
-                  'Unsettled Balances',
-                  'This room has unsettled balances. Please settle all balances before deleting the room.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Go to Splits',
-                      onPress: () => navigation.navigate('RoomHome', { room_id, screen: 'Splits' }),
-                    },
-                  ],
-                );
-              } else {
-                showAlert('Error', message);
-              }
-              setDeleting(false);
-            }
-          },
-        },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteRoomMutation.mutate() },
       ],
     );
   };

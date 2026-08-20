@@ -8,23 +8,30 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
+import { queryKeys } from '../services/queryClient';
 
 export default function CreateRoomScreen({ navigation }: any) {
+  const queryClient = useQueryClient();
   const features = [
     'Split expenses easily',
     'Track who owes what',
     'Manage shared groceries',
   ];
 
-  const handleCreateRoom = async () => {
-    try {
-      const result = await api.createRoom();
+  const createRoomMutation = useMutation({
+    mutationFn: api.createRoom,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.rooms });
       navigation.replace('RoomHome', { room_id: result.id });
-    } catch (error) {
+    },
+    onError: (error) => {
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create room');
-    }
-  };
+    },
+  });
+
+  const handleCreateRoom = () => createRoomMutation.mutate();
 
   return (
     <ScrollView contentContainerStyle={styles.container}>

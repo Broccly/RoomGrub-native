@@ -10,8 +10,8 @@ import { navigationRef } from './navigationRef';
 import { getAuthBootstrap } from '../utils/authBootstrap';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../services/api';
+import { queryClient, queryKeys } from '../services/queryClient';
 import { colors } from '../theme/colors';
-import { Role, RoomListItem, UserSummary } from '../types/api';
 import Avatar from '../components/Avatar';
 import LoginScreen from '../screens/LoginScreen';
 import AuthCallbackScreen from '../screens/AuthCallbackScreen';
@@ -45,14 +45,11 @@ const linking = {
   },
 };
 
-type RoomWithRole = RoomListItem & { role: Role | null; memberList: UserSummary[] };
-
-type InitialRoute = 'Login' | 'RoomsList' | 'CreateRoom' | null;
+type InitialRoute = 'Login' | 'RoomsList' | null;
 
 export default function AppNavigator() {
   const { user } = useAuth();
   const [initialRouteName, setInitialRouteName] = useState<InitialRoute>(null);
-  const [prefetchedRooms, setPrefetchedRooms] = useState<RoomWithRole[] | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -61,40 +58,31 @@ export default function AppNavigator() {
 
       if (!user) {
         if (mounted) setInitialRouteName('Login');
-        SplashScreen.hideAsync().catch(() => {});
         return;
       }
 
-      try {
-        const rooms = await api.listRooms();
-        const withRoles = await Promise.all(
-          rooms.map(async (room) => {
-            try {
-              const members = await api.listMembers(room.id);
-              const me = members.find((m) => m.email === user.email);
-              return { ...room, role: me?.role ?? null, memberList: members };
-            } catch {
-              return { ...room, role: null, memberList: [] };
-            }
-          }),
-        );
-        if (!mounted) return;
-        setPrefetchedRooms(withRoles);
-        setInitialRouteName(withRoles.length === 0 ? 'CreateRoom' : 'RoomsList');
-      } catch (error) {
-        // Session expired (401) — httpClient already cleared the stored
-        // token/user, so send the user straight to Login instead of
-        // showing RoomsList with a stale/empty room list.
-        const sessionExpired = error instanceof Error && error.message === 'Session expired';
-        if (mounted) setInitialRouteName(sessionExpired ? 'Login' : 'RoomsList');
-      } finally {
-        SplashScreen.hideAsync().catch(() => {});
-      }
+      if (mounted) setInitialRouteName('RoomsList');
+
+      // Warm the rooms cache in the background — RoomsListScreen renders from
+      // its own useQuery, which paints instantly from the MMKV-persisted
+      // cache on relaunch while this revalidates.
+      queryClient.prefetchQuery({ queryKey: queryKeys.rooms, queryFn: api.listRooms }).catch(() => {});
     })();
     return () => {
       mounted = false;
     };
   }, []);
+
+  // Hide the native splash only after `initialRouteName` has actually
+  // committed and the real navigator tree is about to paint — hiding it
+  // eagerly inside the async bootstrap above races the setState, so the
+  // splash disappears a frame before AppNavigator re-renders past its
+  // `return null` guard, producing a blank white flash.
+  useEffect(() => {
+    if (initialRouteName !== null) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [initialRouteName]);
 
   if (initialRouteName === null) {
     // Native splash screen is still covering the app while we resolve auth.
@@ -107,12 +95,7 @@ export default function AppNavigator() {
         <Stack.Navigator initialRouteName={initialRouteName} screenOptions={{ ...headerStyle }}>
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
           <Stack.Screen name="AuthCallback" component={AuthCallbackScreen} options={{ headerShown: false }} />
-          <Stack.Screen
-            name="RoomsList"
-            component={RoomsListScreen}
-            options={{ headerShown: false }}
-            initialParams={prefetchedRooms ? { prefetchedRooms } : undefined}
-          />
+          <Stack.Screen name="RoomsList" component={RoomsListScreen} options={{ headerShown: false }} />
           <Stack.Screen name="CreateRoom" component={CreateRoomScreen} options={{ title: 'Create Room' }} />
           <Stack.Screen name="InviteAccept" component={InviteAcceptScreen} options={{ title: 'Invite' }} />
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,14 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import useUserRole from '../hooks/useUserRole';
 import { useRoomContext } from '../context/RoomContext';
 import { formatAmount } from '../utils/format';
 import { api } from '../services/api';
-import { SplitsData } from '../types/api';
+import { queryKeys } from '../services/queryClient';
 import { computeSplitsFiltered, ComputedSplits, MemberBalance } from '../utils/splitCalculations';
 import { colors } from '../theme/colors';
 import { showAlert } from '../utils/alert';
@@ -68,12 +68,16 @@ function ShareCard({ computed }: { computed: ComputedSplits }) {
 export default function SplitsScreen() {
   const { roomId } = useRoomContext();
   const { role } = useUserRole();
-  const [isSettling, setIsSettling] = useState(false);
+  const queryClient = useQueryClient();
   const [isSharing, setIsSharing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [splitsData, setSplitsData] = useState<SplitsData | null>(null);
   const shareRef = useRef<ViewShot>(null);
+
+  const splitsQuery = useQuery({
+    queryKey: roomId ? queryKeys.splits(roomId) : ['splits', 'disabled'],
+    queryFn: () => api.getSplits(roomId!),
+    enabled: !!roomId,
+  });
+  const splitsData = splitsQuery.data ?? null;
 
   const computed: ComputedSplits | null = splitsData ? computeSplitsFiltered(splitsData, {}) : null;
   const profileByEmail: Record<string, string | null> = {};
@@ -81,30 +85,30 @@ export default function SplitsScreen() {
     profileByEmail[mb.member.user_email] = mb.member.profile;
   });
 
-  const loadSplits = useCallback(
-    async (isRefresh = false) => {
-      if (!roomId) return;
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
-
-      try {
-        const data = await api.getSplits(roomId);
-        setSplitsData(data);
-      } catch (error) {
-        showAlert('Error', error instanceof Error ? error.message : 'Failed to load splits');
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+  const settleAllMutation = useMutation({
+    mutationFn: () => {
+      if (!roomId || !computed) throw new Error('Not ready');
+      return api.settleAll(
+        roomId,
+        computed.pendingSettlements.map((mb) => ({
+          user_email: mb.member.user_email,
+          pending_amount: mb.balance,
+        })),
+        { date_from: null, date_to: null, member_emails: null },
+      );
+    },
+    onSuccess: () => {
+      showAlert('Success', 'Balances settled.');
+      if (roomId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.splits(roomId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.roomDashboard(roomId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.roomSummary(roomId) });
       }
     },
-    [roomId],
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      loadSplits();
-    }, [loadSplits])
-  );
+    onError: (error) => {
+      showAlert('Error', error instanceof Error ? error.message : 'Failed to settle balances');
+    },
+  });
 
   const handleSettleAll = () => {
     if (!roomId || !computed) return;
@@ -114,28 +118,7 @@ export default function SplitsScreen() {
       `Settle all ${computed.pendingSettlements.length} pending balances?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Settle',
-          onPress: async () => {
-            setIsSettling(true);
-            try {
-              await api.settleAll(
-                roomId,
-                computed.pendingSettlements.map((mb) => ({
-                  user_email: mb.member.user_email,
-                  pending_amount: mb.balance,
-                })),
-                { date_from: null, date_to: null, member_emails: null },
-              );
-              showAlert('Success', 'Balances settled.');
-              await loadSplits(true);
-            } catch (error) {
-              showAlert('Error', error instanceof Error ? error.message : 'Failed to settle balances');
-            } finally {
-              setIsSettling(false);
-            }
-          },
-        },
+        { text: 'Settle', onPress: () => settleAllMutation.mutate() },
       ]
     );
   };
@@ -155,7 +138,7 @@ export default function SplitsScreen() {
     }
   };
 
-  if (loading || !computed) {
+  if (splitsQuery.isPending || !computed) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={colors.brand} />
@@ -172,7 +155,12 @@ export default function SplitsScreen() {
 
       <ScrollView
         style={styles.container}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadSplits(true)} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={splitsQuery.isFetching && !splitsQuery.isPending}
+            onRefresh={() => splitsQuery.refetch()}
+          />
+        }
       >
         <View style={styles.summaryRow}>
           <View style={[styles.summaryCard, { backgroundColor: '#fdf3f3' }]}>
@@ -285,13 +273,13 @@ export default function SplitsScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.settleButton, isSettling && { opacity: 0.6 }]}
+                  style={[styles.settleButton, settleAllMutation.isPending && { opacity: 0.6 }]}
                   onPress={handleSettleAll}
-                  disabled={isSettling}
+                  disabled={settleAllMutation.isPending}
                 >
-                  {!isSettling && <Ionicons name="card-outline" size={18} color="#fff" />}
+                  {!settleAllMutation.isPending && <Ionicons name="card-outline" size={18} color="#fff" />}
                   <Text style={styles.settleButtonText}>
-                    {isSettling ? 'Settling...' : `Settle All (${computed.pendingSettlements.length})`}
+                    {settleAllMutation.isPending ? 'Settling...' : `Settle All (${computed.pendingSettlements.length})`}
                   </Text>
                 </TouchableOpacity>
               </View>

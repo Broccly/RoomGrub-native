@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import Avatar from '../components/Avatar';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../services/api';
+import { queryKeys } from '../services/queryClient';
 import { colors } from '../theme/colors';
 import { Role, RoomListItem, UserSummary } from '../types/api';
 
@@ -20,61 +22,36 @@ const MAX_VISIBLE_AVATARS = 4;
 
 type RoomWithRole = RoomListItem & { role: Role | null; memberList: UserSummary[] };
 
-export default function RoomsListScreen({ navigation, route }: any) {
+export default function RoomsListScreen({ navigation }: any) {
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
-  const prefetchedRooms: RoomWithRole[] | undefined = route?.params?.prefetchedRooms;
-  const [rooms, setRooms] = useState<RoomWithRole[]>(prefetchedRooms ?? []);
-  const [loading, setLoading] = useState(!prefetchedRooms);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState(false);
 
-  const firstName = (user?.name || user?.email || 'there').split(' ')[0];
+  const roomsQuery = useQuery({
+    queryKey: queryKeys.rooms,
+    queryFn: api.listRooms,
+  });
+  const roomList = roomsQuery.data ?? [];
+
+  const membersQueries = useQueries({
+    queries: roomList.map((room) => ({
+      queryKey: queryKeys.members(room.id),
+      queryFn: () => api.listMembers(room.id),
+    })),
+  });
+
+  const rooms: RoomWithRole[] = roomList.map((room, index) => {
+    const members = membersQueries[index]?.data ?? [];
+    const me = members.find((m) => m.email === user?.email);
+    return { ...room, role: me?.role ?? null, memberList: members };
+  });
+
+  const loading = roomsQuery.isPending;
+  const loadError = roomsQuery.isError;
 
   const handleLogout = async () => {
     await logout();
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
-
-  const loadRooms = useCallback(
-    async (isRefresh = false) => {
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
-      setLoadError(false);
-
-      try {
-        const list = await api.listRooms();
-        const withRoles = await Promise.all(
-          list.map(async (room) => {
-            try {
-              const members = await api.listMembers(room.id);
-              const me = members.find((m) => m.email === user?.email);
-              return { ...room, role: me?.role ?? null, memberList: members };
-            } catch {
-              return { ...room, role: null, memberList: [] };
-            }
-          }),
-        );
-        setRooms(withRoles);
-      } catch {
-        // Fetch failed (offline, timeout, etc.) — a 401 already redirects to
-        // Login via the global unauthorized handler, so anything reaching
-        // here is a transient failure. Don't clobber existing rooms; just
-        // flag it so we don't claim "no rooms" when we simply don't know.
-        setLoadError(true);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [user?.email],
-  );
-
-  useEffect(() => {
-    if (prefetchedRooms) return;
-    loadRooms();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadRooms]);
 
   if (loading) {
     return (
@@ -89,12 +66,16 @@ export default function RoomsListScreen({ navigation, route }: any) {
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 12 }]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => loadRooms(true)} tintColor={colors.brand} />
+          <RefreshControl
+            refreshing={roomsQuery.isFetching && !roomsQuery.isPending}
+            onRefresh={() => roomsQuery.refetch()}
+            tintColor={colors.brand}
+          />
         }
       >
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.greetingTitle}>Hi {firstName} 👋</Text>
+            <Text style={styles.greetingTitle}>Hi {(user?.name || user?.email || 'there').split(' ')[0]} 👋</Text>
             <Text style={styles.greetingSubtitle}>Your Rooms</Text>
           </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>

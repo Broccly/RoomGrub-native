@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,12 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { formatAmount, formatShortDate, formatMonthYear } from '../utils/format';
 import { api } from '../services/api';
-import { ExpenseDetail, ExpenseItem, UserSummary } from '../types/api';
+import { queryKeys } from '../services/queryClient';
+import { ExpenseItem } from '../types/api';
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -26,13 +27,6 @@ export default function ExpensesScreen({ route }: any) {
 
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
-  const [cursor, setCursor] = useState<number | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [members, setMembers] = useState<UserSummary[]>([]);
 
   // Filters
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
@@ -47,9 +41,7 @@ export default function ExpensesScreen({ route }: any) {
   const [pickerTarget, setPickerTarget] = useState<'from' | 'to' | null>(null);
 
   const [detailOpen, setDetailOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState('');
-  const [detail, setDetail] = useState<ExpenseDetail | null>(null);
+  const [detailExpenseId, setDetailExpenseId] = useState<number | null>(null);
 
   // Debounce free-text search before it drives a server query, matching the web app.
   useEffect(() => {
@@ -57,58 +49,56 @@ export default function ExpensesScreen({ route }: any) {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const loadExpenses = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+  const filters = {
+    limit: PAGE_SIZE,
+    settled: showSettled ? undefined : 'false',
+    search: debouncedSearch || undefined,
+    user_email: selectedMember || undefined,
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined,
+  };
 
-    try {
-      const data = await api.listExpenses(room_id, {
-        limit: PAGE_SIZE,
-        settled: showSettled ? undefined : 'false',
-        search: debouncedSearch || undefined,
-        user_email: selectedMember || undefined,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
-      });
-      setExpenses(data.items);
-      setCursor(data.next_cursor);
-      setHasMore(data.next_cursor !== null);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [room_id, debouncedSearch, selectedMember, dateFrom, dateTo, showSettled]);
+  const expensesQuery = useInfiniteQuery({
+    queryKey: queryKeys.expenses(room_id, filters),
+    queryFn: ({ pageParam }) =>
+      api.listExpenses(room_id, { ...filters, cursor: pageParam ?? undefined }),
+    initialPageParam: null as number | null,
+    getNextPageParam: (lastPage) => lastPage.next_cursor,
+  });
 
-  const loadMore = async () => {
-    if (loadingMore || !hasMore || cursor === null) return;
-    setLoadingMore(true);
-    try {
-      const data = await api.listExpenses(room_id, {
-        limit: PAGE_SIZE,
-        cursor,
-        settled: showSettled ? undefined : 'false',
-        search: debouncedSearch || undefined,
-        user_email: selectedMember || undefined,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
-      });
-      setExpenses((prev) => [...prev, ...data.items]);
-      setCursor(data.next_cursor);
-      setHasMore(data.next_cursor !== null);
-    } finally {
-      setLoadingMore(false);
+  const expenses = useMemo(
+    () => expensesQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [expensesQuery.data],
+  );
+  const loading = expensesQuery.isPending;
+  const loadingMore = expensesQuery.isFetchingNextPage;
+  const refreshing = expensesQuery.isFetching && !loading && !loadingMore;
+  const hasMore = expensesQuery.hasNextPage;
+
+  const loadMore = () => {
+    if (expensesQuery.hasNextPage && !expensesQuery.isFetchingNextPage) {
+      expensesQuery.fetchNextPage();
     }
   };
 
-  useEffect(() => {
-    api.listMembers(room_id).then(setMembers).catch(() => {});
-  }, [room_id]);
+  const membersQuery = useQuery({
+    queryKey: queryKeys.members(room_id),
+    queryFn: () => api.listMembers(room_id),
+  });
+  const members = membersQuery.data ?? [];
 
-  useFocusEffect(
-    useCallback(() => {
-      loadExpenses(false);
-    }, [loadExpenses])
-  );
+  const detailQuery = useQuery({
+    queryKey: detailExpenseId ? queryKeys.expenseDetail(room_id, detailExpenseId) : ['expense-detail', 'disabled'],
+    queryFn: () => api.getExpenseDetail(room_id, detailExpenseId!),
+    enabled: detailOpen && detailExpenseId !== null,
+  });
+  const detail = detailQuery.data ?? null;
+  const detailLoading = detailQuery.isPending && detailOpen;
+  const detailError = detailQuery.isError
+    ? detailQuery.error instanceof Error
+      ? detailQuery.error.message
+      : 'Failed to load expense details'
+    : '';
 
   const memberNameByEmail = useMemo(() => {
     const map: Record<string, string> = {};
@@ -153,26 +143,14 @@ export default function ExpensesScreen({ route }: any) {
     showSettled,
   ].filter(Boolean).length;
 
-  const handleExpenseClick = async (expenseId: number) => {
+  const handleExpenseClick = (expenseId: number) => {
+    setDetailExpenseId(expenseId);
     setDetailOpen(true);
-    setDetailLoading(true);
-    setDetailError('');
-    setDetail(null);
-    try {
-      const result = await api.getExpenseDetail(room_id, expenseId);
-      setDetail(result);
-    } catch (error) {
-      setDetailError(error instanceof Error ? error.message : 'Failed to load expense details');
-    } finally {
-      setDetailLoading(false);
-    }
   };
 
   const closeDetail = () => {
     setDetailOpen(false);
-    setDetailLoading(false);
-    setDetailError('');
-    setDetail(null);
+    setDetailExpenseId(null);
   };
 
   const formatDisplayDate = (d: Date | null) =>
@@ -308,7 +286,7 @@ export default function ExpensesScreen({ route }: any) {
           data={flatData}
           renderItem={renderItem}
           keyExtractor={(item) => item.key}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadExpenses(true)} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => expensesQuery.refetch()} />}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
           ListEmptyComponent={

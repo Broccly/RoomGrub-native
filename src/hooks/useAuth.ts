@@ -6,6 +6,7 @@ import * as tokenStorage from '../utils/tokenStorage';
 import { StoredUser } from '../utils/tokenStorage';
 import { getAuthBootstrap, setAuthBootstrap } from '../utils/authBootstrap';
 import { resetToLogin } from '../navigation/navigationRef';
+import { queryClient } from '../services/queryClient';
 
 export function useAuth() {
   const [user, setUser] = useState<StoredUser | null>(null);
@@ -22,6 +23,7 @@ export function useAuth() {
 
     setUnauthorizedHandler(() => {
       if (mounted) setUser(null);
+      queryClient.clear();
       resetToLogin();
     });
 
@@ -52,6 +54,7 @@ export function useAuth() {
     await tokenStorage.clearToken();
     await tokenStorage.clearUser();
     setAuthBootstrap({ token: null, user: null });
+    queryClient.clear();
     setUser(null);
   }, []);
 
