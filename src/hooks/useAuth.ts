@@ -5,6 +5,7 @@ import { setUnauthorizedHandler } from '../services/httpClient';
 import * as tokenStorage from '../utils/tokenStorage';
 import { StoredUser } from '../utils/tokenStorage';
 import { getAuthBootstrap, setAuthBootstrap } from '../utils/authBootstrap';
+import { resetToLogin } from '../navigation/navigationRef';
 
 export function useAuth() {
   const [user, setUser] = useState<StoredUser | null>(null);
@@ -21,6 +22,7 @@ export function useAuth() {
 
     setUnauthorizedHandler(() => {
       if (mounted) setUser(null);
+      resetToLogin();
     });
 
     return () => {

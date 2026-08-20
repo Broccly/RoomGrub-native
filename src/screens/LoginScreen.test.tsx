@@ -28,7 +28,7 @@ describe('LoginScreen', () => {
 
   it('renders the Google sign-in button', () => {
     renderLogin();
-    expect(screen.getByText('Login with Google')).toBeTruthy();
+    expect(screen.getByText('Continue with Google')).toBeTruthy();
   });
 
   it('redirects to AuthCallback once already authenticated', () => {
@@ -47,7 +47,7 @@ describe('LoginScreen', () => {
     (mockedGoogleSignin.signIn as jest.Mock).mockResolvedValue({ data: { idToken: 'id-token-123' } });
 
     const navigation = renderLogin();
-    fireEvent.press(screen.getByText('Login with Google'));
+    fireEvent.press(screen.getByText('Continue with Google'));
 
     await waitFor(() => expect(login).toHaveBeenCalledWith('google', 'id-token-123'));
     expect(navigation.replace).toHaveBeenCalledWith('AuthCallback');
@@ -60,7 +60,7 @@ describe('LoginScreen', () => {
     (mockedGoogleSignin.signIn as jest.Mock).mockResolvedValue({});
 
     renderLogin();
-    fireEvent.press(screen.getByText('Login with Google'));
+    fireEvent.press(screen.getByText('Continue with Google'));
 
     await waitFor(() => expect(mockedGoogleSignin.signIn).toHaveBeenCalled());
     expect(login).not.toHaveBeenCalled();
