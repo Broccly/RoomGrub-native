@@ -24,6 +24,8 @@ import MemberDetailScreen from '../screens/MemberDetailScreen';
 import InviteMemberScreen from '../screens/InviteMemberScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ActivityHistoryScreen from '../screens/ActivityHistoryScreen';
+import ContactSupportScreen from '../screens/ContactSupportScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -136,10 +138,12 @@ export default function AppNavigator() {
           />
 
           {/* Screens pushed on top of the tab navigator */}
-          <Stack.Screen name="AddGrocery" component={AddGroceryScreen} options={{ title: 'Add Grocery' }} />
+          <Stack.Screen name="AddGrocery" component={AddGroceryScreen} options={{ title: 'Add Expense' }} />
           <Stack.Screen name="MemberDetail" component={MemberDetailScreen} options={{ title: 'Member Details' }} />
           <Stack.Screen name="InviteMember" component={InviteMemberScreen} options={{ title: 'Invite Friend' }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+          <Stack.Screen name="ContactSupport" component={ContactSupportScreen} options={{ title: 'Contact Support' }} />
+          <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ title: 'Privacy Policy' }} />
           <Stack.Screen name="ActivityHistory" component={ActivityHistoryScreen} options={{ title: 'Activity History' }} />
         </Stack.Navigator>
       </RoomProvider>

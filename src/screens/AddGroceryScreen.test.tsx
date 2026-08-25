@@ -17,7 +17,7 @@ const mockedApi = api as jest.Mocked<typeof api>;
 const route = { params: { room_id: 10 } };
 
 function getAddGroceryButton() {
-  return screen.getByTestId('submit-button-ADD GROCERY');
+  return screen.getByTestId('submit-button-ADD EXPENSE');
 }
 
 describe('AddGroceryScreen submit button disabled state', () => {
@@ -40,7 +40,7 @@ describe('AddGroceryScreen submit button disabled state', () => {
     renderWithProviders(<AddGroceryScreen route={route} />);
     await waitFor(() => expect(screen.getByPlaceholderText('What did you buy?')).toBeTruthy());
 
-    fireEvent.changeText(screen.getByTestId('amount-input-ADD GROCERY'), '50');
+    fireEvent.changeText(screen.getByTestId('amount-input-ADD EXPENSE'), '50');
 
     expect(getAddGroceryButton().props.accessibilityState.disabled).toBe(true);
   });
@@ -51,9 +51,9 @@ describe('AddGroceryScreen submit button disabled state', () => {
 
     // The description input only becomes editable once a positive amount is
     // entered, so this exercises the "price missing/zero" branch of canSubmit.
-    fireEvent.changeText(screen.getByTestId('amount-input-ADD GROCERY'), '50');
+    fireEvent.changeText(screen.getByTestId('amount-input-ADD EXPENSE'), '50');
     fireEvent.changeText(screen.getByPlaceholderText('What did you buy?'), 'Milk');
-    fireEvent.changeText(screen.getByTestId('amount-input-ADD GROCERY'), '');
+    fireEvent.changeText(screen.getByTestId('amount-input-ADD EXPENSE'), '');
 
     expect(getAddGroceryButton().props.accessibilityState.disabled).toBe(true);
   });
@@ -62,7 +62,7 @@ describe('AddGroceryScreen submit button disabled state', () => {
     renderWithProviders(<AddGroceryScreen route={route} />);
     await waitFor(() => expect(screen.getByPlaceholderText('What did you buy?')).toBeTruthy());
 
-    fireEvent.changeText(screen.getByTestId('amount-input-ADD GROCERY'), '50');
+    fireEvent.changeText(screen.getByTestId('amount-input-ADD EXPENSE'), '50');
     fireEvent.changeText(screen.getByPlaceholderText('What did you buy?'), 'Milk');
 
     expect(getAddGroceryButton().props.accessibilityState.disabled).toBe(false);

@@ -10,9 +10,11 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import CrossPlatformDatePicker, { CrossPlatformDatePickerHandle } from '../components/CrossPlatformDatePicker';
 import useUserRole from '../hooks/useUserRole';
@@ -49,6 +51,7 @@ function ParticipantPicker({
   visible,
   onClose,
   lockedUserId,
+  narrow,
 }: {
   members: UserSummary[];
   selectedIds: number[];
@@ -57,12 +60,13 @@ function ParticipantPicker({
   visible: boolean;
   onClose: () => void;
   lockedUserId?: number;
+  narrow?: boolean;
 }) {
   return (
     <>
-      <TouchableOpacity style={styles.pillBtn} onPress={onOpen}>
+      <TouchableOpacity style={[styles.pillBtn, narrow && styles.pillBtnNarrow]} onPress={onOpen}>
         <Ionicons name="people-outline" size={16} color={colors.brand} />
-        <Text style={styles.pillBtnText}>
+        <Text style={styles.pillBtnText} numberOfLines={1}>
           {selectedIds.length === members.length ? 'Everyone' : `${selectedIds.length} people`}
         </Text>
       </TouchableOpacity>
@@ -130,6 +134,8 @@ function GroceryHeroForm({
   msg,
   submitLabel,
   pinBottom,
+  bottomInset = 0,
+  narrow = false,
 }: {
   title: string;
   amount: string;
@@ -146,12 +152,33 @@ function GroceryHeroForm({
   msg: string;
   submitLabel: string;
   pinBottom?: boolean;
+  bottomInset?: number;
+  narrow?: boolean;
 }) {
   const [descFocused, setDescFocused] = useState(false);
   const [amountWidth, setAmountWidth] = useState(40);
   const canSubmit = description.trim().length > 0 && parseFloat(amount || '0') > 0;
-  const isSuccess = msg.startsWith('✅');
+  const isSuccess = !msg.startsWith('❌');
   const amountDisplay = formatAmountDisplay(amount);
+
+  const submitButton = (
+    <TouchableOpacity
+      testID={`submit-button-${title}`}
+      style={styles.submitWrap}
+      onPress={onSubmit}
+      disabled={loading || !canSubmit}
+      activeOpacity={0.85}
+    >
+      <LinearGradient
+        colors={loading || !canSubmit ? [colors.textMuted, colors.textMuted] : [colors.brand, colors.brandDark]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.submitGradient}
+      >
+        <Text style={styles.submitText}>{loading ? 'Adding...' : submitLabel}</Text>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={pinBottom && styles.pageWrap}>
@@ -198,13 +225,13 @@ function GroceryHeroForm({
         )}
       </View>
 
-      <View>
-        <View style={styles.toolbar}>
+      <View style={pinBottom && { paddingBottom: 88 + bottomInset }}>
+        <View style={[styles.toolbar, narrow && styles.toolbarNarrow]}>
           {participantSlot}
 
-          <TouchableOpacity style={styles.pillBtn} onPress={onDatePress}>
+          <TouchableOpacity style={[styles.pillBtn, narrow && styles.pillBtnNarrow]} onPress={onDatePress}>
             <Ionicons name="calendar-outline" size={16} color={colors.brand} />
-            <Text style={styles.pillBtnText}>
+            <Text style={styles.pillBtnText} numberOfLines={1}>
               {date ? formatDateLabel(date) : 'Date'}
             </Text>
             {date && (
@@ -214,28 +241,17 @@ function GroceryHeroForm({
             )}
           </TouchableOpacity>
 
-          <View style={{ flex: 1 }} />
-
           {friendSlot}
         </View>
 
-        <TouchableOpacity
-          testID={`submit-button-${title}`}
-          style={styles.submitWrap}
-          onPress={onSubmit}
-          disabled={loading || !canSubmit}
-          activeOpacity={0.85}
-        >
-          <LinearGradient
-            colors={loading || !canSubmit ? [colors.textMuted, colors.textMuted] : [colors.brand, colors.brandDark]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.submitGradient}
-          >
-            <Text style={styles.submitText}>{loading ? 'Adding...' : submitLabel}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+        {!pinBottom && submitButton}
       </View>
+
+      {pinBottom && (
+        <View style={[styles.floatingSubmitWrap, { bottom: bottomInset + 24 }]}>
+          {submitButton}
+        </View>
+      )}
     </View>
   );
 }
@@ -245,6 +261,9 @@ export default function AddGroceryScreen({ route }: any) {
   const { role } = useUserRole();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const narrow = width < 380;
 
   const membersQuery = useQuery({
     queryKey: queryKeys.members(room_id),
@@ -294,13 +313,13 @@ export default function AddGroceryScreen({ route }: any) {
       api.createExpense(room_id, payload),
     onSuccess: () => {
       invalidateExpenseData();
-      setMsg('✅ Grocery added!');
+      setMsg('🎉 Expense added!');
       setGrocery('');
       setPrice('');
       setDate(null);
     },
     onError: (error) => {
-      setMsg(`❌ ${error instanceof Error ? error.message : 'Failed to add grocery'}`);
+      setMsg(`❌ ${error instanceof Error ? error.message : 'Failed to add expense'}`);
     },
   });
 
@@ -409,7 +428,7 @@ export default function AddGroceryScreen({ route }: any) {
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <GroceryHeroForm
-          title="ADD GROCERY"
+          title="ADD EXPENSE"
           amount={price}
           onAmountChange={setPrice}
           description={grocery}
@@ -429,21 +448,24 @@ export default function AddGroceryScreen({ route }: any) {
               onOpen={() => setShowParticipantPicker(true)}
               onClose={() => setShowParticipantPicker(false)}
               lockedUserId={user?.id}
+              narrow={narrow}
             />
           }
           friendSlot={
             role === 'Admin' ? (
-              <TouchableOpacity style={styles.pillBtn} onPress={() => setShowFriendModal(true)}>
+              <TouchableOpacity style={[styles.pillBtn, narrow && styles.pillBtnNarrow]} onPress={() => setShowFriendModal(true)}>
                 <Ionicons name="person-add-outline" size={16} color={colors.brand} />
-                <Text style={styles.pillBtnText}>For friend</Text>
+                <Text style={styles.pillBtnText} numberOfLines={1}>For friend</Text>
               </TouchableOpacity>
             ) : undefined
           }
           onSubmit={handleAdd}
           loading={loading}
           msg={msg}
-          submitLabel="Add Grocery"
+          submitLabel="Add Expense"
           pinBottom
+          bottomInset={insets.bottom}
+          narrow={narrow}
         />
 
         <CrossPlatformDatePicker
@@ -519,12 +541,14 @@ export default function AddGroceryScreen({ route }: any) {
                     onOpen={() => setShowFriendParticipantPicker(true)}
                     onClose={() => setShowFriendParticipantPicker(false)}
                     lockedUserId={selectedFriend?.user_id}
+                    narrow={narrow}
                   />
                 }
                 onSubmit={handleAddForFriend}
                 loading={friendLoading}
                 msg={friendMsg}
-                submitLabel="Add Grocery"
+                submitLabel="Add Expense"
+                narrow={narrow}
               />
 
               <CrossPlatformDatePicker
@@ -621,15 +645,20 @@ const styles = StyleSheet.create({
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
+    gap: 8,
     borderTopWidth: 1,
     borderTopColor: colors.purple100,
     paddingTop: 16,
     marginTop: 28,
   },
+  toolbarNarrow: {
+    gap: 8,
+  },
   pillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
     gap: 6,
     borderWidth: 1,
     borderColor: colors.purple200,
@@ -638,8 +667,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  pillBtnText: { color: colors.brand, fontWeight: '500', fontSize: 14 },
+  pillBtnNarrow: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  pillBtnText: { color: colors.brand, fontWeight: '500', fontSize: 14, flexShrink: 1 },
   pillBtnTextMuted: { color: colors.textMuted },
+  floatingSubmitWrap: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+  },
   participantRow: {
     flexDirection: 'row',
     alignItems: 'center',
