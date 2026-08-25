@@ -109,6 +109,34 @@ export default function SettingsScreen({ navigation, route }: any) {
           </View>
           <Ionicons name="chevron-forward" size={18} color="#999" />
         </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => navigation.navigate('ContactSupport')}
+        >
+          <Ionicons name="headset-outline" size={22} color="#9333ea" />
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>Contact Support</Text>
+            <Text style={styles.settingHint}>Get in touch with us</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#999" />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => navigation.navigate('PrivacyPolicy')}
+        >
+          <Ionicons name="shield-checkmark-outline" size={22} color="#9333ea" />
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>Privacy</Text>
+            <Text style={styles.settingHint}>Read our privacy policy</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#999" />
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
