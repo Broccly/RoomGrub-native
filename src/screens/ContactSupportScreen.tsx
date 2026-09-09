@@ -1,14 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 
 const SUPPORT_EMAIL = 's.sankar@broccly.in';
 const SUPPORT_PHONE = '+91 8238187630';
 
 export default function ContactSupportScreen() {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom + 24 }]}>
       <View style={styles.heroIcon}>
         <Ionicons name="headset-outline" size={36} color="#fff" />
       </View>

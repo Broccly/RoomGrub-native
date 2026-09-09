@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatCurrency, formatDate } from '../utils/format';
 import { api } from '../services/api';
 import { queryKeys } from '../services/queryClient';
@@ -14,6 +15,7 @@ import { useRoomContext } from '../context/RoomContext';
 
 export default function MemberDetailScreen({ route }: any) {
   const { roomId } = useRoomContext();
+  const insets = useSafeAreaInsets();
   const member_id = Number(route.params.member_id);
 
   const { data, isPending } = useQuery({
@@ -74,7 +76,7 @@ export default function MemberDetailScreen({ route }: any) {
         ))
       )}
 
-      <View style={{ height: 40 }} />
+      <View style={{ height: insets.bottom + 32 }} />
     </ScrollView>
   );
 }

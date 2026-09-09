@@ -10,6 +10,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import useUserRole from '../hooks/useUserRole';
 import { api } from '../services/api';
 import { queryKeys } from '../services/queryClient';
@@ -21,6 +22,7 @@ export default function MembersScreen({ navigation, route }: any) {
   const room_id = Number(route.params.room_id);
   const { role, loading: roleLoading } = useUserRole();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const [editModal, setEditModal] = useState<{ open: boolean; member: UserSummary | null }>({
     open: false,
     member: null,
@@ -71,6 +73,7 @@ export default function MembersScreen({ navigation, route }: any) {
   return (
     <View style={styles.container}>
       <ScrollView
+        contentContainerStyle={{ paddingBottom: 56 + insets.bottom + 32 }}
         refreshControl={
           <RefreshControl
             refreshing={membersQuery.isFetching && !membersQuery.isPending}

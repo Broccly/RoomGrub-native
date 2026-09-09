@@ -9,6 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
@@ -69,6 +70,7 @@ export default function SplitsScreen() {
   const { roomId } = useRoomContext();
   const { role } = useUserRole();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const [isSharing, setIsSharing] = useState(false);
   const shareRef = useRef<ViewShot>(null);
 
@@ -287,7 +289,7 @@ export default function SplitsScreen() {
           </>
         )}
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 56 + insets.bottom + 32 }} />
       </ScrollView>
 
       <View style={styles.offscreen} pointerEvents="none">

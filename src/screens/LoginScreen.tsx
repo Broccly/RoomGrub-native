@@ -12,6 +12,7 @@ import {
 import * as WebBrowser from 'expo-web-browser';
 import { useIdTokenAuthRequest } from 'expo-auth-session/providers/google';
 import Svg, { Path } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../hooks/useAuth';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -26,6 +27,7 @@ if (Platform.OS !== 'web') {
 
 export default function LoginScreen({ navigation }: any) {
   const { login, isAuthenticated } = useAuth();
+  const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const taglineFontSize = Math.min(Math.max(windowWidth * 0.036, 11), 16);
 
@@ -108,7 +110,7 @@ export default function LoginScreen({ navigation }: any) {
         </View>
       </View>
 
-      <View style={styles.content}>
+      <View style={[styles.content, { paddingBottom: insets.bottom }]}>
         <TouchableOpacity
           onPress={signInWithGoogle}
           activeOpacity={0.85}

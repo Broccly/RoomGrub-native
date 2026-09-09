@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -118,25 +120,11 @@ function ParticipantPicker({
   );
 }
 
-function GroceryHeroForm({
-  title,
-  amount,
-  onAmountChange,
-  description,
-  onDescriptionChange,
-  date,
-  onDatePress,
-  onClearDate,
-  participantSlot,
-  friendSlot,
-  onSubmit,
-  loading,
-  msg,
-  submitLabel,
-  pinBottom,
-  bottomInset = 0,
-  narrow = false,
-}: {
+export type GroceryHeroFormHandle = {
+  focusAmount: () => void;
+};
+
+const GroceryHeroForm = React.forwardRef<GroceryHeroFormHandle, {
   title: string;
   amount: string;
   onAmountChange: (t: string) => void;
@@ -154,9 +142,33 @@ function GroceryHeroForm({
   pinBottom?: boolean;
   bottomInset?: number;
   narrow?: boolean;
-}) {
+}>(function GroceryHeroForm({
+  title,
+  amount,
+  onAmountChange,
+  description,
+  onDescriptionChange,
+  date,
+  onDatePress,
+  onClearDate,
+  participantSlot,
+  friendSlot,
+  onSubmit,
+  loading,
+  msg,
+  submitLabel,
+  pinBottom,
+  bottomInset = 0,
+  narrow = false,
+}, ref) {
   const [descFocused, setDescFocused] = useState(false);
   const [amountWidth, setAmountWidth] = useState(40);
+  const amountInputRef = useRef<TextInput>(null);
+  const descriptionInputRef = useRef<TextInput>(null);
+
+  useImperativeHandle(ref, () => ({
+    focusAmount: () => amountInputRef.current?.focus(),
+  }));
   const canSubmit = description.trim().length > 0 && parseFloat(amount || '0') > 0;
   const isSuccess = !msg.startsWith('❌');
   const amountDisplay = formatAmountDisplay(amount);
@@ -194,17 +206,26 @@ function GroceryHeroForm({
             {amountDisplay || '0'}
           </Text>
           <TextInput
+            ref={amountInputRef}
             testID={`amount-input-${title}`}
             style={[styles.amountInput, { width: Math.max(amountWidth, 20) }]}
             value={amountDisplay}
             onChangeText={(t) => onAmountChange(sanitizeAmountInput(t))}
             keyboardType="decimal-pad"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => {
+              if (parseFloat(amount || '0') > 0) {
+                descriptionInputRef.current?.focus();
+              }
+            }}
             placeholder="0"
             placeholderTextColor={colors.textMuted}
           />
         </View>
 
         <TextInput
+          ref={descriptionInputRef}
           style={[styles.descriptionInput, descFocused && styles.descriptionInputFocused]}
           placeholder="What did you buy?"
           value={description}
@@ -225,36 +246,100 @@ function GroceryHeroForm({
         )}
       </View>
 
-      <View style={pinBottom && { paddingBottom: 88 + bottomInset }}>
-        <View style={[styles.toolbar, narrow && styles.toolbarNarrow]}>
-          {participantSlot}
+      {!pinBottom && (
+        <View>
+          <View style={[styles.toolbar, narrow && styles.toolbarNarrow]}>
+            {participantSlot}
 
-          <TouchableOpacity style={[styles.pillBtn, narrow && styles.pillBtnNarrow]} onPress={onDatePress}>
-            <Ionicons name="calendar-outline" size={16} color={colors.brand} />
-            <Text style={styles.pillBtnText} numberOfLines={1}>
-              {date ? formatDateLabel(date) : 'Date'}
-            </Text>
-            {date && (
-              <TouchableOpacity onPress={onClearDate} hitSlop={8}>
-                <Ionicons name="close-circle" size={16} color={colors.brand} />
-              </TouchableOpacity>
-            )}
-          </TouchableOpacity>
+            <TouchableOpacity style={[styles.pillBtn, narrow && styles.pillBtnNarrow]} onPress={onDatePress}>
+              <Ionicons name="calendar-outline" size={16} color={colors.brand} />
+              <Text style={styles.pillBtnText} numberOfLines={1}>
+                {date ? formatDateLabel(date) : 'Date'}
+              </Text>
+              {date && (
+                <TouchableOpacity onPress={onClearDate} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={colors.brand} />
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
 
-          {friendSlot}
-        </View>
+            {friendSlot}
+          </View>
 
-        {!pinBottom && submitButton}
-      </View>
-
-      {pinBottom && (
-        <View style={[styles.floatingSubmitWrap, { bottom: bottomInset + 24 }]}>
           {submitButton}
         </View>
       )}
     </View>
   );
+});
+
+function GroceryActionBar({
+  narrow,
+  participantSlot,
+  date,
+  onDatePress,
+  onClearDate,
+  friendSlot,
+  onSubmit,
+  loading,
+  canSubmit,
+  submitLabel,
+  bottomInset,
+}: {
+  narrow: boolean;
+  participantSlot: React.ReactNode;
+  date: Date | null;
+  onDatePress: () => void;
+  onClearDate: () => void;
+  friendSlot?: React.ReactNode;
+  onSubmit: () => void;
+  loading: boolean;
+  canSubmit: boolean;
+  submitLabel: string;
+  bottomInset: number;
+}) {
+  return (
+    <View style={[styles.actionBarWrap, { paddingBottom: bottomInset + 16 }]}>
+      <View style={[styles.toolbar, styles.toolbarInBar, narrow && styles.toolbarNarrow]}>
+        {participantSlot}
+
+        <TouchableOpacity style={[styles.pillBtn, narrow && styles.pillBtnNarrow]} onPress={onDatePress}>
+          <Ionicons name="calendar-outline" size={16} color={colors.brand} />
+          <Text style={styles.pillBtnText} numberOfLines={1}>
+            {date ? formatDateLabel(date) : 'Date'}
+          </Text>
+          {date && (
+            <TouchableOpacity onPress={onClearDate} hitSlop={8}>
+              <Ionicons name="close-circle" size={16} color={colors.brand} />
+            </TouchableOpacity>
+          )}
+        </TouchableOpacity>
+
+        {friendSlot}
+      </View>
+
+      <TouchableOpacity
+        testID="submit-button-ADD EXPENSE"
+        style={styles.submitWrap}
+        onPress={onSubmit}
+        disabled={loading || !canSubmit}
+        activeOpacity={0.85}
+      >
+        <LinearGradient
+          colors={loading || !canSubmit ? [colors.textMuted, colors.textMuted] : [colors.brand, colors.brandDark]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.submitGradient}
+        >
+          <Text style={styles.submitText}>{loading ? 'Adding...' : submitLabel}</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </View>
+  );
 }
+
+const INITIAL_WINDOW_HEIGHT = Dimensions.get('window').height;
+const ACTION_BAR_RESERVED_HEIGHT = 180;
 
 export default function AddGroceryScreen({ route }: any) {
   const room_id = Number(route.params.room_id);
@@ -264,6 +349,15 @@ export default function AddGroceryScreen({ route }: any) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const narrow = width < 380;
+  const navigation = useNavigation();
+  const heroFormRef = useRef<GroceryHeroFormHandle>(null);
+
+  useEffect(() => {
+    const unsubscribe = (navigation as any).addListener('transitionEnd', () => {
+      heroFormRef.current?.focusAmount();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const membersQuery = useQuery({
     queryKey: queryKeys.members(room_id),
@@ -421,13 +515,37 @@ export default function AddGroceryScreen({ route }: any) {
     );
   }
 
+  const participantSlot = (
+    <ParticipantPicker
+      members={members}
+      selectedIds={participantIds}
+      onToggle={toggleParticipant}
+      visible={showParticipantPicker}
+      onOpen={() => setShowParticipantPicker(true)}
+      onClose={() => setShowParticipantPicker(false)}
+      lockedUserId={user?.id}
+      narrow={narrow}
+    />
+  );
+
+  const friendSlot =
+    role === 'Admin' ? (
+      <TouchableOpacity style={[styles.pillBtn, narrow && styles.pillBtnNarrow]} onPress={() => setShowFriendModal(true)}>
+        <Ionicons name="person-add-outline" size={16} color={colors.brand} />
+        <Text style={styles.pillBtnText} numberOfLines={1}>For friend</Text>
+      </TouchableOpacity>
+    ) : undefined;
+
+  const canSubmit = grocery.trim().length > 0 && parseFloat(price || '0') > 0;
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <View style={[styles.container, { height: INITIAL_WINDOW_HEIGHT }]}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: ACTION_BAR_RESERVED_HEIGHT + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <GroceryHeroForm
+          ref={heroFormRef}
           title="ADD EXPENSE"
           amount={price}
           onAmountChange={setPrice}
@@ -439,26 +557,8 @@ export default function AddGroceryScreen({ route }: any) {
             setShowDatePicker(true);
           }}
           onClearDate={() => setDate(null)}
-          participantSlot={
-            <ParticipantPicker
-              members={members}
-              selectedIds={participantIds}
-              onToggle={toggleParticipant}
-              visible={showParticipantPicker}
-              onOpen={() => setShowParticipantPicker(true)}
-              onClose={() => setShowParticipantPicker(false)}
-              lockedUserId={user?.id}
-              narrow={narrow}
-            />
-          }
-          friendSlot={
-            role === 'Admin' ? (
-              <TouchableOpacity style={[styles.pillBtn, narrow && styles.pillBtnNarrow]} onPress={() => setShowFriendModal(true)}>
-                <Ionicons name="person-add-outline" size={16} color={colors.brand} />
-                <Text style={styles.pillBtnText} numberOfLines={1}>For friend</Text>
-              </TouchableOpacity>
-            ) : undefined
-          }
+          participantSlot={participantSlot}
+          friendSlot={friendSlot}
           onSubmit={handleAdd}
           loading={loading}
           msg={msg}
@@ -479,8 +579,28 @@ export default function AddGroceryScreen({ route }: any) {
         />
       </ScrollView>
 
+      <GroceryActionBar
+        narrow={narrow}
+        participantSlot={participantSlot}
+        date={date}
+        onDatePress={() => {
+          datePickerRef.current?.open();
+          setShowDatePicker(true);
+        }}
+        onClearDate={() => setDate(null)}
+        friendSlot={friendSlot}
+        onSubmit={handleAdd}
+        loading={loading}
+        canSubmit={canSubmit}
+        submitLabel="Add Expense"
+        bottomInset={insets.bottom}
+      />
+
       <Modal visible={showFriendModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Grocery for Friend</Text>
@@ -562,9 +682,9 @@ export default function AddGroceryScreen({ route }: any) {
               />
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -655,6 +775,22 @@ const styles = StyleSheet.create({
   toolbarNarrow: {
     gap: 8,
   },
+  actionBarWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.background,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.purple100,
+  },
+  toolbarInBar: {
+    borderTopWidth: 0,
+    paddingTop: 0,
+    marginTop: 0,
+  },
   pillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -674,11 +810,6 @@ const styles = StyleSheet.create({
   },
   pillBtnText: { color: colors.brand, fontWeight: '500', fontSize: 14, flexShrink: 1 },
   pillBtnTextMuted: { color: colors.textMuted },
-  floatingSubmitWrap: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-  },
   participantRow: {
     flexDirection: 'row',
     alignItems: 'center',

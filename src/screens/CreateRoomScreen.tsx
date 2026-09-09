@@ -8,12 +8,14 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { queryKeys } from '../services/queryClient';
 
 export default function CreateRoomScreen({ navigation }: any) {
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const features = [
     'Split expenses easily',
     'Track who owes what',
@@ -34,7 +36,7 @@ export default function CreateRoomScreen({ navigation }: any) {
   const handleCreateRoom = () => createRoomMutation.mutate();
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 32 }]}>
       <View style={styles.content}>
         <View style={styles.heroIcon}>
           <Ionicons name="home" size={36} color="#fff" />

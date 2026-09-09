@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useQueries } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../hooks/useAuth';
 import { useRoomContext } from '../context/RoomContext';
 import { api } from '../services/api';
@@ -21,6 +22,7 @@ import Avatar from '../components/Avatar';
 export default function HomeScreen({ navigation }: any) {
   const { user } = useAuth();
   const { roomId } = useRoomContext();
+  const insets = useSafeAreaInsets();
 
   const firstName = (user?.name || user?.email || 'there').split(' ')[0];
 
@@ -60,7 +62,7 @@ export default function HomeScreen({ navigation }: any) {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: 56 + insets.bottom + 32 }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} />}
     >
       {/* Greeting */}

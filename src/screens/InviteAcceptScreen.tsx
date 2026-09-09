@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../services/api';
 import { queryKeys } from '../services/queryClient';
 import { useAuth } from '../hooks/useAuth';
@@ -12,6 +13,7 @@ export default function InviteAcceptScreen({ navigation, route }: any) {
   const token: string = route.params?.token;
   const { isAuthenticated, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
 
   const inviteQuery = useQuery({
     queryKey: token ? queryKeys.inviteByToken(token) : ['invite', 'disabled'],
@@ -50,7 +52,7 @@ export default function InviteAcceptScreen({ navigation, route }: any) {
 
   if (!token) {
     return (
-      <View style={[styles.container, styles.centered]}>
+      <View style={[styles.container, styles.centered, { paddingBottom: insets.bottom }]}>
         <Ionicons name="alert-circle-outline" size={48} color={colors.danger} />
         <Text style={styles.title}>Invite Unavailable</Text>
         <Text style={styles.subtitle}>Missing invite link.</Text>
@@ -66,7 +68,7 @@ export default function InviteAcceptScreen({ navigation, route }: any) {
 
   if (inviteQuery.isPending || authLoading) {
     return (
-      <View style={[styles.container, styles.centered]}>
+      <View style={[styles.container, styles.centered, { paddingBottom: insets.bottom }]}>
         <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
@@ -78,7 +80,7 @@ export default function InviteAcceptScreen({ navigation, route }: any) {
         ? inviteQuery.error.message
         : 'This invite link is invalid or has expired.';
     return (
-      <View style={[styles.container, styles.centered]}>
+      <View style={[styles.container, styles.centered, { paddingBottom: insets.bottom }]}>
         <Ionicons name="alert-circle-outline" size={48} color={colors.danger} />
         <Text style={styles.title}>Invite Unavailable</Text>
         <Text style={styles.subtitle}>{reason}</Text>
@@ -96,7 +98,7 @@ export default function InviteAcceptScreen({ navigation, route }: any) {
 
   if (!isAuthenticated) {
     return (
-      <View style={[styles.container, styles.centered]}>
+      <View style={[styles.container, styles.centered, { paddingBottom: insets.bottom }]}>
         <Ionicons name="mail-open-outline" size={48} color={colors.brand} />
         <Text style={styles.title}>You've been invited!</Text>
         <Text style={styles.subtitle}>
@@ -110,7 +112,7 @@ export default function InviteAcceptScreen({ navigation, route }: any) {
   }
 
   return (
-    <View style={[styles.container, styles.centered]}>
+    <View style={[styles.container, styles.centered, { paddingBottom: insets.bottom }]}>
       <Ionicons name="mail-open-outline" size={48} color={colors.brand} />
       <Text style={styles.title}>Room Invitation</Text>
       <Text style={styles.subtitle}>

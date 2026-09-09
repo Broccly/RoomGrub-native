@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation } from '@tanstack/react-query';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../services/api';
 import { colors } from '../theme/colors';
 import { useRoomContext } from '../context/RoomContext';
@@ -18,6 +19,7 @@ const INVITE_WEB_BASE = 'https://roomgrub.broccly.in';
 
 export default function InviteMemberScreen() {
   const { roomId } = useRoomContext();
+  const insets = useSafeAreaInsets();
 
   const generateLinkMutation = useMutation({
     mutationFn: () => api.createInvite(roomId!),
@@ -50,7 +52,7 @@ export default function InviteMemberScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.card}>
         <View style={styles.iconWrap}>
           <Ionicons name="person-add" size={28} color={colors.brand} />

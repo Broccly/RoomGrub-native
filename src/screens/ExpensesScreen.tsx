@@ -12,6 +12,7 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { formatAmount, formatShortDate, formatMonthYear } from '../utils/format';
@@ -24,6 +25,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 export default function ExpensesScreen({ route }: any) {
   const room_id = Number(route.params.room_id);
+  const insets = useSafeAreaInsets();
 
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -289,6 +291,7 @@ export default function ExpensesScreen({ route }: any) {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => expensesQuery.refetch()} />}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
+          contentContainerStyle={{ paddingBottom: 56 + insets.bottom + 32 }}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyTitle}>No expenses found</Text>
@@ -308,7 +311,7 @@ export default function ExpensesScreen({ route }: any) {
       {/* Filter Modal */}
       <Modal visible={showFilterModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 24 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Filters</Text>
               <TouchableOpacity onPress={() => setShowFilterModal(false)}>
@@ -392,7 +395,7 @@ export default function ExpensesScreen({ route }: any) {
       {/* Expense Detail Modal */}
       <Modal visible={detailOpen} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 24 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Expense Details</Text>
               <TouchableOpacity testID="close-expense-detail" onPress={closeDetail}>

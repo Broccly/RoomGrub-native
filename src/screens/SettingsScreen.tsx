@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../hooks/useAuth';
 import useUserRole from '../hooks/useUserRole';
@@ -21,6 +22,7 @@ export default function SettingsScreen({ navigation, route }: any) {
   const { role } = useUserRole();
   const { setRoomId } = useRoomContext();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const room_id = Number(route.params?.room_id);
 
   const handleSignOut = async () => {
@@ -92,7 +94,10 @@ export default function SettingsScreen({ navigation, route }: any) {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+    >
       <Text style={styles.heading}>Room Settings</Text>
 
       <View style={styles.card}>

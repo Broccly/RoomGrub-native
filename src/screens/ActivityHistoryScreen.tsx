@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CrossPlatformDatePicker, { CrossPlatformDatePickerHandle } from '../components/CrossPlatformDatePicker';
 import useUserRole from '../hooks/useUserRole';
 import { api } from '../services/api';
@@ -33,6 +34,7 @@ export default function ActivityHistoryScreen({ route }: any) {
   const { role } = useUserRole();
   const isAdmin = role === 'Admin';
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
 
   const expensesQuery = useQuery({
     queryKey: queryKeys.expenses(room_id, ACTIVITY_FILTERS),
@@ -212,7 +214,7 @@ export default function ActivityHistoryScreen({ route }: any) {
         data={expenses}
         renderItem={renderItem}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -223,7 +225,7 @@ export default function ActivityHistoryScreen({ route }: any) {
 
       <Modal visible={editing !== null} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 24 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Expense</Text>
               <TouchableOpacity onPress={closeEdit}>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 
 const SECTIONS = [
@@ -37,8 +38,12 @@ const SECTIONS = [
 ];
 
 export default function PrivacyPolicyScreen() {
+  const insets = useSafeAreaInsets();
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+    >
       <View style={styles.heroIcon}>
         <Ionicons name="shield-checkmark-outline" size={32} color="#fff" />
       </View>
