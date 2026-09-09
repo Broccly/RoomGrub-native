@@ -22,7 +22,7 @@ describe('InviteMemberScreen', () => {
     renderWithProviders(<InviteMemberScreen />);
     fireEvent.press(screen.getByText('Generate Invite Link'));
 
-    await waitFor(() => expect(screen.getByText('roomgrub://invite/tok123')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('https://roomgrub.broccly.in/invite/tok123')).toBeTruthy());
     expect(screen.getByText('Expires in 7 days')).toBeTruthy();
   });
 

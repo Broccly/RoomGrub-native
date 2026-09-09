@@ -3,12 +3,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import InviteMemberScreen from '../../screens/InviteMemberScreen';
 import InviteAcceptScreen from '../../screens/InviteAcceptScreen';
 import { useAuth } from '../../hooks/useAuth';
 import { api } from '../../services/api';
 import { RoomProvider } from '../../context/RoomContext';
-import { createTestQueryClient } from '../../test-utils/renderWithProviders';
+import { createTestQueryClient, testSafeAreaMetrics } from '../../test-utils/renderWithProviders';
 
 // Generates an invite token via InviteMemberScreen, then feeds that same
 // token into InviteAcceptScreen (as a deep link would) and accepts it —
@@ -36,17 +37,19 @@ describe('invite flow', () => {
     });
 
     render(
-      <QueryClientProvider client={createTestQueryClient()}>
-        <NavigationContainer>
-          <RoomProvider initialRoomId={10}>
-            <InviteMemberScreen />
-          </RoomProvider>
-        </NavigationContainer>
-      </QueryClientProvider>,
+      <SafeAreaProvider initialMetrics={testSafeAreaMetrics}>
+        <QueryClientProvider client={createTestQueryClient()}>
+          <NavigationContainer>
+            <RoomProvider initialRoomId={10}>
+              <InviteMemberScreen />
+            </RoomProvider>
+          </NavigationContainer>
+        </QueryClientProvider>
+      </SafeAreaProvider>,
     );
 
     fireEvent.press(screen.getByText('Generate Invite Link'));
-    await waitFor(() => expect(screen.getByText('roomgrub://invite/shared-token')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('https://roomgrub.broccly.in/invite/shared-token')).toBeTruthy());
 
     const generatedToken = (mockedApi.createInvite.mock.results[0].value as Promise<any>);
     const invite = await generatedToken;
@@ -56,14 +59,16 @@ describe('invite flow', () => {
     mockedApi.acceptInvite.mockResolvedValue({ room_id: 10, message: 'Joined' });
 
     render(
-      <QueryClientProvider client={createTestQueryClient()}>
-        <NavigationContainer>
-          <Stack.Navigator>
-            <Stack.Screen name="InviteAccept" component={InviteAcceptScreen} initialParams={{ token: invite.token }} />
-            <Stack.Screen name="RoomHome">{() => null}</Stack.Screen>
-          </Stack.Navigator>
-        </NavigationContainer>
-      </QueryClientProvider>,
+      <SafeAreaProvider initialMetrics={testSafeAreaMetrics}>
+        <QueryClientProvider client={createTestQueryClient()}>
+          <NavigationContainer>
+            <Stack.Navigator>
+              <Stack.Screen name="InviteAccept" component={InviteAcceptScreen} initialParams={{ token: invite.token }} />
+              <Stack.Screen name="RoomHome">{() => null}</Stack.Screen>
+            </Stack.Navigator>
+          </NavigationContainer>
+        </QueryClientProvider>
+      </SafeAreaProvider>,
     );
 
     await waitFor(() => expect(screen.getByText('Room Invitation')).toBeTruthy());

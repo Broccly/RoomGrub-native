@@ -1,9 +1,11 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import LoginScreen from './LoginScreen';
 import { useAuth } from '../hooks/useAuth';
 import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
+import { testSafeAreaMetrics } from '../test-utils/renderWithProviders';
 
 jest.mock('../hooks/useAuth');
 
@@ -13,9 +15,11 @@ const mockedIsSuccessResponse = isSuccessResponse as unknown as jest.Mock;
 
 function renderLogin(navigation = { replace: jest.fn(), navigate: jest.fn() }) {
   render(
-    <NavigationContainer>
-      <LoginScreen navigation={navigation} />
-    </NavigationContainer>,
+    <SafeAreaProvider initialMetrics={testSafeAreaMetrics}>
+      <NavigationContainer>
+        <LoginScreen navigation={navigation} />
+      </NavigationContainer>
+    </SafeAreaProvider>,
   );
   return navigation;
 }
