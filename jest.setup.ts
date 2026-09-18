@@ -66,3 +66,10 @@ jest.spyOn(require('react-native').Alert, 'alert').mockImplementation((...args: 
   const button = buttons?.find((b) => b.style !== 'cancel') ?? buttons?.[0];
   button?.onPress?.();
 });
+
+jest.mock('@react-native-firebase/messaging', () => ({
+  getMessaging: jest.fn(() => ({})),
+  getToken: jest.fn(() => Promise.resolve('test-token')),
+  onMessage: jest.fn(() => jest.fn()),
+  setBackgroundMessageHandler: jest.fn(),
+}));

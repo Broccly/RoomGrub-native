@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "66447075045",
+    "project_id": "roomgrub-eac2b",
+    "storage_bucket": "roomgrub-eac2b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:66447075045:android:5f82e9dcf002330706160c",
+        "android_client_info": {
+          "package_name": "broccly.roomgrub.twa"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD4wyyOfiYz4giXR2d445nHuWa1Fkr5mD4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
