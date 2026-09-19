@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useQueries } from '@tanstack/react-query';
+import { createMMKV } from 'react-native-mmkv';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../hooks/useAuth';
@@ -18,11 +19,24 @@ import { queryKeys } from '../services/queryClient';
 import { colors } from '../theme/colors';
 import { formatAmount } from '../utils/format';
 import Avatar from '../components/Avatar';
+import { syncPushToken } from '../services/pushNotifications';
+
+// Permission is per device, so prompt at most once per install; users who
+// decline can still enable notifications from system settings.
+const pushPrefs = createMMKV({ id: 'push-prefs' });
+const PERMISSION_ASKED_KEY = 'notificationPermissionAsked';
 
 export default function HomeScreen({ navigation }: any) {
   const { user } = useAuth();
   const { roomId } = useRoomContext();
   const insets = useSafeAreaInsets();
+
+  // Every route into a room lands here, so this is the one place we prompt.
+  useEffect(() => {
+    if (pushPrefs.getBoolean(PERMISSION_ASKED_KEY)) return;
+    pushPrefs.set(PERMISSION_ASKED_KEY, true);
+    syncPushToken({ askPermission: true });
+  }, []);
 
   const firstName = (user?.name || user?.email || 'there').split(' ')[0];
 

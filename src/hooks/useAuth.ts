@@ -7,6 +7,7 @@ import { StoredUser } from '../utils/tokenStorage';
 import { getAuthBootstrap, setAuthBootstrap } from '../utils/authBootstrap';
 import { resetToLogin } from '../navigation/navigationRef';
 import { queryClient } from '../services/queryClient';
+import { syncPushToken, unregisterPushToken } from '../services/pushNotifications';
 
 export function useAuth() {
   const [user, setUser] = useState<StoredUser | null>(null);
@@ -39,10 +40,13 @@ export function useAuth() {
     await tokenStorage.setUser(result.user);
     setAuthBootstrap({ token: result.access_token, user: result.user });
     setUser(result.user);
+    syncPushToken();
     return result.user;
   }, []);
 
   const logout = useCallback(async () => {
+    // Needs the JWT, so it must run before clearToken().
+    await unregisterPushToken();
     if (Platform.OS !== 'web') {
       try {
         const { GoogleSignin } = require('@react-native-google-signin/google-signin');

@@ -67,9 +67,23 @@ jest.spyOn(require('react-native').Alert, 'alert').mockImplementation((...args: 
   button?.onPress?.();
 });
 
+// MMKV's native (Nitro) module isn't available under Jest; back it with a Map.
+jest.mock('react-native-mmkv', () => ({
+  createMMKV: () => {
+    const store = new Map<string, unknown>();
+    return {
+      getString: (key: string) => store.get(key) as string | undefined,
+      getBoolean: (key: string) => store.get(key) as boolean | undefined,
+      set: (key: string, value: unknown) => store.set(key, value),
+      remove: (key: string) => store.delete(key),
+    };
+  },
+}));
+
 jest.mock('@react-native-firebase/messaging', () => ({
   getMessaging: jest.fn(() => ({})),
   getToken: jest.fn(() => Promise.resolve('test-token')),
   onMessage: jest.fn(() => jest.fn()),
+  onTokenRefresh: jest.fn(() => jest.fn()),
   setBackgroundMessageHandler: jest.fn(),
 }));

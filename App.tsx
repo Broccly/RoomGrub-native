@@ -8,15 +8,26 @@ import { queryClient } from './src/services/queryClient';
 import { queryPersister } from './src/services/queryPersister';
 import {
   listenForForegroundMessages,
-  registerForPushNotifications,
+  listenForTokenRefresh,
+  syncPushToken,
 } from './src/services/pushNotifications';
+import { getAuthBootstrap } from './src/utils/authBootstrap';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
   useEffect(() => {
-    registerForPushNotifications();
-    return listenForForegroundMessages();
+    // Returning users: re-register every launch (the backend upserts). New
+    // users are registered from useAuth.login() instead.
+    getAuthBootstrap().then(({ user }) => {
+      if (user) syncPushToken();
+    });
+    const stopForeground = listenForForegroundMessages();
+    const stopRefresh = listenForTokenRefresh();
+    return () => {
+      stopForeground();
+      stopRefresh();
+    };
   }, []);
 
   return (

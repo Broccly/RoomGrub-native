@@ -115,4 +115,10 @@ export const api = {
     request<InviteAcceptResponse>(`/invites/${token}/accept`, 'POST'),
 
   rejectInvite: (token: string) => request<void>(`/invites/${token}/reject`, 'POST'),
+
+  registerPushToken: (token: string, platform = 'android') =>
+    request<void>('/notifications/fcm-token', 'POST', { payload: { fcm_token: token, platform } }),
+
+  unregisterPushToken: (token: string) =>
+    request<void>('/notifications/fcm-token', 'DELETE', { payload: { fcm_token: token } }),
 };
