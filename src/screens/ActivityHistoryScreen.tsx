@@ -22,6 +22,7 @@ import { formatAmount, formatShortDate } from '../utils/format';
 import { colors } from '../theme/colors';
 import { showAlert } from '../utils/alert';
 import Avatar from '../components/Avatar';
+import ActionButton from '../components/ActionButton';
 
 function sanitizeAmountInput(text: string): string {
   return text.replace(/[^0-9.]/g, '');
@@ -286,13 +287,9 @@ export default function ActivityHistoryScreen({ route }: any) {
               <TouchableOpacity style={styles.cancelBtn} onPress={closeEdit}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-                onPress={saveEdit}
-                disabled={saving}
-              >
-                <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
-              </TouchableOpacity>
+              <ActionButton style={styles.saveBtn} onPress={saveEdit} loading={saving}>
+                <Text style={styles.saveBtnText}>Save Changes</Text>
+              </ActionButton>
             </View>
           </View>
         </View>

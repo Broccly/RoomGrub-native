@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../services/api';
 import { queryKeys } from '../services/queryClient';
 import { useAuth } from '../hooks/useAuth';
+import ActionButton from '../components/ActionButton';
 import { colors } from '../theme/colors';
 import { setPendingInviteToken } from '../utils/pendingInvite';
 
@@ -121,12 +122,24 @@ export default function InviteAcceptScreen({ navigation, route }: any) {
       <Text style={styles.hint}>
         Expires in {invite.days_left} day{invite.days_left !== 1 ? 's' : ''}
       </Text>
-      <TouchableOpacity style={styles.button} onPress={() => acceptMutation.mutate()} disabled={submitting}>
-        {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Accept</Text>}
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.secondaryButton} onPress={() => rejectMutation.mutate()} disabled={submitting}>
+      <ActionButton
+        style={styles.button}
+        onPress={() => acceptMutation.mutate()}
+        loading={acceptMutation.isPending}
+        disabled={rejectMutation.isPending}
+      >
+        <Text style={styles.buttonText}>Accept</Text>
+      </ActionButton>
+      <ActionButton
+        style={styles.secondaryButton}
+        onPress={() => rejectMutation.mutate()}
+        loading={rejectMutation.isPending}
+        disabled={acceptMutation.isPending}
+        indicatorColor="#666"
+        shimmer={false}
+      >
         <Text style={styles.secondaryButtonText}>Decline</Text>
-      </TouchableOpacity>
+      </ActionButton>
     </View>
   );
 }

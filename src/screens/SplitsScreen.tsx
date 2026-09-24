@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
@@ -22,6 +21,7 @@ import { computeSplitsFiltered, ComputedSplits, MemberBalance } from '../utils/s
 import { colors } from '../theme/colors';
 import { showAlert } from '../utils/alert';
 import Avatar from '../components/Avatar';
+import ActionButton from '../components/ActionButton';
 
 const statusColors = {
   credit: { border: '#86efac', bg: '#f0fdf4', text: '#16a34a' },
@@ -266,24 +266,27 @@ export default function SplitsScreen() {
 
             {role === 'Admin' && (
               <View style={styles.actionsRow}>
-                <TouchableOpacity style={styles.shareButton} onPress={handleShare} disabled={isSharing}>
-                  {isSharing ? (
-                    <ActivityIndicator size="small" color={colors.brandDark} />
-                  ) : (
-                    <Ionicons name="share-outline" size={22} color={colors.brandDark} />
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.settleButton, settleAllMutation.isPending && { opacity: 0.6 }]}
-                  onPress={handleSettleAll}
-                  disabled={settleAllMutation.isPending}
+                <ActionButton
+                  style={styles.shareButton}
+                  onPress={handleShare}
+                  loading={isSharing}
+                  indicatorColor={colors.brandDark}
+                  shimmer={false}
+                  accessibilityLabel="Share splits"
                 >
-                  {!settleAllMutation.isPending && <Ionicons name="card-outline" size={18} color="#fff" />}
+                  <Ionicons name="share-outline" size={22} color={colors.brandDark} />
+                </ActionButton>
+
+                <ActionButton
+                  style={styles.settleButton}
+                  onPress={handleSettleAll}
+                  loading={settleAllMutation.isPending}
+                >
+                  <Ionicons name="card-outline" size={18} color="#fff" />
                   <Text style={styles.settleButtonText}>
-                    {settleAllMutation.isPending ? 'Settling...' : `Settle All (${computed.pendingSettlements.length})`}
+                    {`Settle All (${computed.pendingSettlements.length})`}
                   </Text>
-                </TouchableOpacity>
+                </ActionButton>
               </View>
             )}
           </>

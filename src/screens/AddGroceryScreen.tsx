@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import ActionButton from '../components/ActionButton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import CrossPlatformDatePicker, { CrossPlatformDatePickerHandle } from '../components/CrossPlatformDatePicker';
@@ -174,22 +175,16 @@ const GroceryHeroForm = React.forwardRef<GroceryHeroFormHandle, {
   const amountDisplay = formatAmountDisplay(amount);
 
   const submitButton = (
-    <TouchableOpacity
+    <ActionButton
       testID={`submit-button-${title}`}
-      style={styles.submitWrap}
+      style={[styles.submitWrap, styles.submitGradient]}
+      gradientColors={canSubmit ? [colors.brand, colors.brandDark] : [colors.textMuted, colors.textMuted]}
       onPress={onSubmit}
-      disabled={loading || !canSubmit}
-      activeOpacity={0.85}
+      loading={loading}
+      disabled={!canSubmit}
     >
-      <LinearGradient
-        colors={loading || !canSubmit ? [colors.textMuted, colors.textMuted] : [colors.brand, colors.brandDark]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.submitGradient}
-      >
-        <Text style={styles.submitText}>{loading ? 'Adding...' : submitLabel}</Text>
-      </LinearGradient>
-    </TouchableOpacity>
+      <Text style={styles.submitText}>{submitLabel}</Text>
+    </ActionButton>
   );
 
   return (
@@ -318,22 +313,16 @@ function GroceryActionBar({
         {friendSlot}
       </View>
 
-      <TouchableOpacity
+      <ActionButton
         testID="submit-button-ADD EXPENSE"
-        style={styles.submitWrap}
+        style={[styles.submitWrap, styles.submitGradient]}
+        gradientColors={canSubmit ? [colors.brand, colors.brandDark] : [colors.textMuted, colors.textMuted]}
         onPress={onSubmit}
-        disabled={loading || !canSubmit}
-        activeOpacity={0.85}
+        loading={loading}
+        disabled={!canSubmit}
       >
-        <LinearGradient
-          colors={loading || !canSubmit ? [colors.textMuted, colors.textMuted] : [colors.brand, colors.brandDark]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.submitGradient}
-        >
-          <Text style={styles.submitText}>{loading ? 'Adding...' : submitLabel}</Text>
-        </LinearGradient>
-      </TouchableOpacity>
+        <Text style={styles.submitText}>{submitLabel}</Text>
+      </ActionButton>
     </View>
   );
 }

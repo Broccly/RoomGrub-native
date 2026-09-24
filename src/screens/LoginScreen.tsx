@@ -1,10 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   Image,
   StyleSheet,
-  TouchableOpacity,
   Alert,
   Platform,
   useWindowDimensions,
@@ -14,6 +13,7 @@ import { useIdTokenAuthRequest } from 'expo-auth-session/providers/google';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../hooks/useAuth';
+import ActionButton from '../components/ActionButton';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -30,6 +30,8 @@ export default function LoginScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const taglineFontSize = Math.min(Math.max(windowWidth * 0.036, 11), 16);
+  // Web only: the popup resolves via `response`, outside the button's own promise.
+  const [webSigningIn, setWebSigningIn] = useState(false);
 
   const [, response, promptAsync] = useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
@@ -50,11 +52,13 @@ export default function LoginScreen({ navigation }: any) {
         Alert.alert('Login failed', 'Google did not return an ID token.');
         return;
       }
+      setWebSigningIn(true);
       login('google', idToken)
         .then(() => navigation.replace('AuthCallback'))
-        .catch((error) =>
-          Alert.alert('Login failed', error instanceof Error ? error.message : 'Please try again.'),
-        );
+        .catch((error) => {
+          setWebSigningIn(false);
+          Alert.alert('Login failed', error instanceof Error ? error.message : 'Please try again.');
+        });
     } else if (response.type === 'error') {
       Alert.alert('Login failed', 'Please try again.');
     }
@@ -111,14 +115,15 @@ export default function LoginScreen({ navigation }: any) {
       </View>
 
       <View style={[styles.content, { paddingBottom: insets.bottom }]}>
-        <TouchableOpacity
+        <ActionButton
           onPress={signInWithGoogle}
-          activeOpacity={0.85}
+          loading={webSigningIn}
+          indicatorColor="#000000"
           style={[styles.googleButtonShadow, styles.googleButton]}
         >
           <GoogleIcon />
           <Text style={styles.googleButtonText}>Continue with Google</Text>
-        </TouchableOpacity>
+        </ActionButton>
 
         <Text
           style={[styles.bottomTagline, { fontSize: taglineFontSize }]}

@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Alert,
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import ActionButton from '../components/ActionButton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
@@ -48,10 +48,14 @@ export default function CreateRoomScreen({ navigation }: any) {
         </Text>
 
         <View style={styles.card}>
-          <TouchableOpacity style={styles.primaryButton} onPress={handleCreateRoom}>
+          <ActionButton
+            style={styles.primaryButton}
+            onPress={handleCreateRoom}
+            loading={createRoomMutation.isPending}
+          >
             <Ionicons name="add" size={20} color="#fff" />
             <Text style={styles.primaryButtonText}>Create New Room</Text>
-          </TouchableOpacity>
+          </ActionButton>
           <Text style={styles.buttonHint}>
             Set up a room and invite your friends
           </Text>

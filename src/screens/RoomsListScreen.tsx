@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import Avatar from '../components/Avatar';
 import { useAuth } from '../hooks/useAuth';
+import ActionButton from '../components/ActionButton';
 import { api } from '../services/api';
 import { queryKeys } from '../services/queryClient';
 import { colors } from '../theme/colors';
@@ -78,9 +79,15 @@ export default function RoomsListScreen({ navigation }: any) {
             <Text style={styles.greetingTitle}>Hi {(user?.name || user?.email || 'there').split(' ')[0]} 👋</Text>
             <Text style={styles.greetingSubtitle}>Your Rooms</Text>
           </View>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+          <ActionButton
+            onPress={handleLogout}
+            style={styles.logoutBtn}
+            indicatorColor={colors.textLight}
+            shimmer={false}
+            accessibilityLabel="Sign out"
+          >
             <Ionicons name="log-out-outline" size={22} color={colors.textLight} />
-          </TouchableOpacity>
+          </ActionButton>
         </View>
 
         {rooms.length === 0 && loadError ? (

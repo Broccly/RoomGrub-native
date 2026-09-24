@@ -6,9 +6,9 @@ import {
   TouchableOpacity,
   Share,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import ActionButton from '../components/ActionButton';
 import { useMutation } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../services/api';
@@ -63,13 +63,9 @@ export default function InviteMemberScreen() {
         </Text>
 
         {!inviteLink ? (
-          <TouchableOpacity style={styles.button} onPress={handleGenerateLink} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Generate Invite Link</Text>
-            )}
-          </TouchableOpacity>
+          <ActionButton style={styles.button} onPress={handleGenerateLink} loading={loading}>
+            <Text style={styles.buttonText}>Generate Invite Link</Text>
+          </ActionButton>
         ) : (
           <>
             <View style={styles.linkBox}>
@@ -84,9 +80,15 @@ export default function InviteMemberScreen() {
               <Ionicons name="share-social-outline" size={18} color="#fff" />
               <Text style={styles.buttonText}>Share Link</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={handleGenerateLink} disabled={loading}>
+            <ActionButton
+              style={styles.secondaryButton}
+              onPress={handleGenerateLink}
+              loading={loading}
+              indicatorColor={colors.brand}
+              shimmer={false}
+            >
               <Text style={styles.secondaryButtonText}>Generate New Link</Text>
-            </TouchableOpacity>
+            </ActionButton>
           </>
         )}
       </View>

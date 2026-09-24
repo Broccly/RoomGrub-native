@@ -57,6 +57,25 @@ describe('LoginScreen', () => {
     expect(navigation.replace).toHaveBeenCalledWith('AuthCallback');
   });
 
+  it('shows the button as busy as soon as it is tapped, while Google sign-in is pending', async () => {
+    let finishSignIn!: (value: unknown) => void;
+    (mockedGoogleSignin.signIn as jest.Mock).mockReturnValue(
+      new Promise((resolve) => {
+        finishSignIn = resolve;
+      }),
+    );
+    mockedIsSuccessResponse.mockReturnValue(false);
+
+    renderLogin();
+    fireEvent.press(screen.getByText('Continue with Google'));
+
+    const button = screen.getByRole('button', { name: /Continue with Google/ });
+    expect(button.props.accessibilityState.busy).toBe(true);
+
+    finishSignIn({});
+    await waitFor(() => expect(button.props.accessibilityState.busy).toBe(false));
+  });
+
   it('does nothing when the user cancels the native sign-in prompt', async () => {
     const login = jest.fn();
     mockedUseAuth.mockReturnValue({ login, isAuthenticated: false });

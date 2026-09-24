@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../hooks/useAuth';
+import ActionButton from '../components/ActionButton';
 import useUserRole from '../hooks/useUserRole';
 import { useRoomContext } from '../context/RoomContext';
 import { api } from '../services/api';
@@ -144,38 +145,35 @@ export default function SettingsScreen({ navigation, route }: any) {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+      <ActionButton style={styles.signOutButton} onPress={handleSignOut} indicatorColor="#ef4444">
         <Ionicons name="log-out-outline" size={20} color="#ef4444" />
         <Text style={styles.signOutText}>Sign Out</Text>
-      </TouchableOpacity>
+      </ActionButton>
 
       {role === 'Admin' && (
         <View style={styles.dangerZone}>
           <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
-          <TouchableOpacity
-            style={[styles.deleteRoomButton, deleting && { opacity: 0.6 }]}
+          <ActionButton
+            style={styles.deleteRoomButton}
             onPress={handleDeleteRoom}
-            disabled={deleting}
+            loading={deleting}
           >
             <Ionicons name="trash-outline" size={20} color="#fff" />
-            <Text style={styles.deleteRoomText}>
-              {deleting ? 'Deleting...' : 'Delete Room'}
-            </Text>
-          </TouchableOpacity>
+            <Text style={styles.deleteRoomText}>Delete Room</Text>
+          </ActionButton>
         </View>
       )}
 
       {role && role !== 'Admin' && (
-        <TouchableOpacity
-          style={[styles.exitRoomButton, deleting && { opacity: 0.6 }]}
+        <ActionButton
+          style={styles.exitRoomButton}
           onPress={handleExitRoom}
-          disabled={deleting}
+          loading={deleting}
+          indicatorColor="#ef4444"
         >
           <Ionicons name="exit-outline" size={20} color="#ef4444" />
-          <Text style={styles.exitRoomText}>
-            {deleting ? 'Exiting...' : 'Exit Room'}
-          </Text>
-        </TouchableOpacity>
+          <Text style={styles.exitRoomText}>Exit Room</Text>
+        </ActionButton>
       )}
     </ScrollView>
   );
