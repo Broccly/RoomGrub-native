@@ -49,11 +49,6 @@ export default function RoomsListScreen({ navigation }: any) {
   const loading = roomsQuery.isPending;
   const loadError = roomsQuery.isError;
 
-  const handleLogout = async () => {
-    await logout();
-    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-  };
-
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -80,7 +75,7 @@ export default function RoomsListScreen({ navigation }: any) {
             <Text style={styles.greetingSubtitle}>Your Rooms</Text>
           </View>
           <ActionButton
-            onPress={handleLogout}
+            onPress={logout}
             style={styles.logoutBtn}
             indicatorColor={colors.textLight}
             shimmer={false}

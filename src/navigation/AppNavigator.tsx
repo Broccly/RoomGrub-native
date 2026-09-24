@@ -95,7 +95,7 @@ export default function AppNavigator() {
     <NavigationContainer ref={navigationRef} linking={linking}>
       <RoomProvider>
         <Stack.Navigator initialRouteName={initialRouteName} screenOptions={{ ...headerStyle }}>
-          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false, animation: 'fade' }} />
           <Stack.Screen name="AuthCallback" component={AuthCallbackScreen} options={{ headerShown: false }} />
           <Stack.Screen name="RoomsList" component={RoomsListScreen} options={{ headerShown: false }} />
           <Stack.Screen name="CreateRoom" component={CreateRoomScreen} options={{ title: 'Create Room' }} />

@@ -36,7 +36,7 @@ describe('SettingsScreen', () => {
     expect(screen.queryByText('Delete Room')).toBeNull();
   });
 
-  it('signs out and resets navigation to Login', async () => {
+  it('signs out via useAuth, which owns the navigation to Login', async () => {
     mockedUseUserRole.mockReturnValue({ role: 'Member' });
     const logout = jest.fn().mockResolvedValue(undefined);
     mockedUseAuth.mockReturnValue({ logout });
@@ -46,7 +46,7 @@ describe('SettingsScreen', () => {
     fireEvent.press(screen.getByText('Sign Out'));
 
     await waitFor(() => expect(logout).toHaveBeenCalled());
-    expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Login' }] });
+    expect(navigation.reset).not.toHaveBeenCalled();
   });
 
   it('deletes the room after confirmation and resets to RoomsList', async () => {

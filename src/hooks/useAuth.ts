@@ -6,7 +6,6 @@ import * as tokenStorage from '../utils/tokenStorage';
 import { StoredUser } from '../utils/tokenStorage';
 import { getAuthBootstrap, setAuthBootstrap } from '../utils/authBootstrap';
 import { resetToLogin } from '../navigation/navigationRef';
-import { queryClient } from '../services/queryClient';
 import { syncPushToken, unregisterPushToken } from '../services/pushNotifications';
 
 export function useAuth() {
@@ -24,7 +23,6 @@ export function useAuth() {
 
     setUnauthorizedHandler(() => {
       if (mounted) setUser(null);
-      queryClient.clear();
       resetToLogin();
     });
 
@@ -58,7 +56,9 @@ export function useAuth() {
     await tokenStorage.clearToken();
     await tokenStorage.clearUser();
     setAuthBootstrap({ token: null, user: null });
-    queryClient.clear();
+    // LoginScreen clears the query cache once it mounts, after the signed-in
+    // screens (and their queries) have unmounted.
+    resetToLogin();
     setUser(null);
   }, []);
 

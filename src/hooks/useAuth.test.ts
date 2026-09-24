@@ -5,8 +5,12 @@ import * as tokenStorage from '../utils/tokenStorage';
 import * as httpClient from '../services/httpClient';
 import { __resetAuthBootstrapForTests } from '../utils/authBootstrap';
 
+import { resetToLogin } from '../navigation/navigationRef';
+import { queryClient } from '../services/queryClient';
+
 jest.mock('../services/authApi');
 jest.mock('../utils/tokenStorage');
+jest.mock('../navigation/navigationRef', () => ({ resetToLogin: jest.fn() }));
 
 const mockedAuthApi = authApi as jest.Mocked<typeof authApi>;
 const mockedTokenStorage = tokenStorage as jest.Mocked<typeof tokenStorage>;
@@ -73,6 +77,23 @@ describe('useAuth', () => {
     expect(mockedTokenStorage.clearUser).toHaveBeenCalled();
     expect(result.current.user).toBeNull();
     expect(result.current.isAuthenticated).toBe(false);
+  });
+
+  it('logout navigates to Login and leaves clearing the query cache to LoginScreen', async () => {
+    const clearSpy = jest.spyOn(queryClient, 'clear');
+    mockedTokenStorage.getToken.mockResolvedValue('jwt-abc');
+    mockedTokenStorage.getUser.mockResolvedValue(mockUser);
+
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(resetToLogin).toHaveBeenCalledTimes(1);
+    expect(clearSpy).not.toHaveBeenCalled();
+    clearSpy.mockRestore();
   });
 
   it('clears the user when a request receives a 401', async () => {

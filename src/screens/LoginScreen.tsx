@@ -13,6 +13,7 @@ import { useIdTokenAuthRequest } from 'expo-auth-session/providers/google';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../hooks/useAuth';
+import { queryClient } from '../services/queryClient';
 import ActionButton from '../components/ActionButton';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -36,6 +37,12 @@ export default function LoginScreen({ navigation }: any) {
   const [, response, promptAsync] = useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
   });
+
+  // Drop the previous session's cached data. Runs after the signed-in screens
+  // unmount, so no mounted query can refetch against the emptied cache.
+  useEffect(() => {
+    queryClient.clear();
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {

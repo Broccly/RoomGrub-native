@@ -26,11 +26,6 @@ export default function SettingsScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const room_id = Number(route.params?.room_id);
 
-  const handleSignOut = async () => {
-    await logout();
-    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-  };
-
   const exitRoomMutation = useMutation({
     mutationFn: () => api.exitRoom(room_id),
     onSuccess: () => {
@@ -145,7 +140,7 @@ export default function SettingsScreen({ navigation, route }: any) {
         </TouchableOpacity>
       </View>
 
-      <ActionButton style={styles.signOutButton} onPress={handleSignOut} indicatorColor="#ef4444">
+      <ActionButton style={styles.signOutButton} onPress={logout} indicatorColor="#ef4444">
         <Ionicons name="log-out-outline" size={20} color="#ef4444" />
         <Text style={styles.signOutText}>Sign Out</Text>
       </ActionButton>

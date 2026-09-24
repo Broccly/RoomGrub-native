@@ -6,6 +6,7 @@ import LoginScreen from './LoginScreen';
 import { useAuth } from '../hooks/useAuth';
 import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
 import { testSafeAreaMetrics } from '../test-utils/renderWithProviders';
+import { queryClient } from '../services/queryClient';
 
 jest.mock('../hooks/useAuth');
 
@@ -28,6 +29,13 @@ describe('LoginScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedUseAuth.mockReturnValue({ login: jest.fn(), isAuthenticated: false });
+  });
+
+  it('clears the previous session\'s query cache on mount', () => {
+    const clearSpy = jest.spyOn(queryClient, 'clear');
+    renderLogin();
+    expect(clearSpy).toHaveBeenCalledTimes(1);
+    clearSpy.mockRestore();
   });
 
   it('renders the Google sign-in button', () => {
