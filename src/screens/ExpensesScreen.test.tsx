@@ -3,7 +3,8 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import ExpensesScreen from './ExpensesScreen';
 import { renderWithProviders } from '../test-utils/renderWithProviders';
 import { api } from '../services/api';
-import { mockExpenseDetail, mockMembers, mockPaginatedExpenses } from '../test-utils/fixtures';
+import { mockExpense, mockExpenseDetail, mockMembers, mockPaginatedExpenses } from '../test-utils/fixtures';
+import { formatShortDate } from '../utils/format';
 
 jest.mock('../services/api');
 
@@ -57,5 +58,27 @@ describe('ExpensesScreen expense detail dialog', () => {
     fireEvent.press(screen.getByText('Milk'));
 
     await waitFor(() => expect(screen.getByText('Expense not found')).toBeTruthy());
+  });
+});
+
+describe('ExpensesScreen expense card', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedApi.listMembers.mockResolvedValue(mockMembers);
+  });
+
+  it('caps a long description at two lines and still shows the date', async () => {
+    const longDescription =
+      'Weekly groceries: rice, dal, vegetables, fruits, milk, eggs, bread, cooking oil, spices and cleaning supplies';
+    mockedApi.listExpenses.mockResolvedValue({
+      items: [{ ...mockExpense, material: longDescription }],
+      next_cursor: null,
+    });
+
+    renderWithProviders(<ExpensesScreen route={route} />);
+
+    await waitFor(() => expect(screen.getByText(longDescription)).toBeTruthy());
+    expect(screen.getByText(longDescription).props.numberOfLines).toBe(2);
+    expect(screen.getByText(formatShortDate(mockExpense.created_at))).toBeTruthy();
   });
 });

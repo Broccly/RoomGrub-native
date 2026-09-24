@@ -207,13 +207,15 @@ export default function ExpensesScreen({ route }: any) {
         </View>
         <View style={styles.expenseInfo}>
           <View style={styles.expenseRow}>
-            <Text style={styles.expenseUser}>
+            <Text style={styles.expenseUser} numberOfLines={1}>
               {userDisplayName || 'Unknown'}
             </Text>
             <Text style={styles.expenseAmount}>{formatAmount(item.money)}</Text>
           </View>
           <View style={styles.expenseRow}>
-            <Text style={styles.expenseMaterial}>{item.material}</Text>
+            <Text style={styles.expenseMaterial} numberOfLines={2}>
+              {item.material}
+            </Text>
             <Text style={styles.expenseDate}>{formatShortDate(item.created_at)}</Text>
           </View>
           {item.settled && (
@@ -562,13 +564,13 @@ const styles = StyleSheet.create({
   expenseRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 2,
   },
-  expenseUser: { fontSize: 15, fontWeight: '600', color: '#333' },
-  expenseAmount: { fontSize: 15, fontWeight: '700', color: '#333' },
-  expenseMaterial: { fontSize: 13, color: '#888' },
-  expenseDate: { fontSize: 13, color: '#666' },
+  expenseUser: { flex: 1, marginRight: 8, fontSize: 15, fontWeight: '600', color: '#333' },
+  expenseAmount: { flexShrink: 0, fontSize: 15, fontWeight: '700', color: '#333' },
+  expenseMaterial: { flex: 1, marginRight: 8, fontSize: 13, color: '#888' },
+  expenseDate: { flexShrink: 0, fontSize: 13, color: '#666' },
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: 48,

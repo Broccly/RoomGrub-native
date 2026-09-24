@@ -151,8 +151,10 @@ export default function HomeScreen({ navigation }: any) {
                       </View>
                     )}
                   </View>
-                  <View>
-                    <Text style={styles.memberName}>{member.name || member.email}</Text>
+                  <View style={styles.memberText}>
+                    <Text style={styles.memberName} numberOfLines={1}>
+                      {member.name || member.email}
+                    </Text>
                     <Text style={[styles.memberStatus, { color: !isPending ? colors.success : '#f59e0b' }]}>
                       {!isPending ? 'Settled' : 'Pending'}
                     </Text>
@@ -251,9 +253,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   memberLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginRight: 12,
+  },
+  memberText: {
+    flex: 1,
   },
   memberAvatarWrap: {
     position: 'relative',
@@ -298,5 +305,6 @@ const styles = StyleSheet.create({
   memberAmount: {
     fontSize: 18,
     fontWeight: '700',
+    flexShrink: 0,
   },
 });

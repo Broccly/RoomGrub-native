@@ -39,6 +39,20 @@ describe('HomeScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('MemberDetail', { room_id: 10, member_id: 2 });
   });
 
+  it('truncates a long member name to one line and still shows the amount', async () => {
+    const longName = 'Bartholomew Maximilian Fitzgerald-Worthington III';
+    mockedApi.getRoomDashboard.mockResolvedValue({
+      ...mockDashboard,
+      members: [{ ...mockDashboard.members[0], name: longName, pending_amount: 1234 }],
+    });
+
+    renderWithProviders(<HomeScreen navigation={makeNavigationMock()} />);
+
+    await waitFor(() => expect(screen.getByText(longName)).toBeTruthy());
+    expect(screen.getByText(longName).props.numberOfLines).toBe(1);
+    expect(screen.getByText('₹1,234')).toBeTruthy();
+  });
+
   it('silently ignores dashboard load failures', async () => {
     mockedApi.getRoomSummary.mockRejectedValue(new Error('network error'));
     mockedApi.getRoomDashboard.mockRejectedValue(new Error('network error'));
