@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import InviteAcceptScreen from './InviteAcceptScreen';
 import { renderWithProviders, makeNavigationMock } from '../test-utils/renderWithProviders';
 import { useAuth } from '../hooks/useAuth';
@@ -75,5 +75,33 @@ describe('InviteAcceptScreen', () => {
 
     await waitFor(() => expect(screen.getByText('Invite Unavailable')).toBeTruthy());
     expect(screen.getByText('Invite expired')).toBeTruthy();
+  });
+});
+
+describe('InviteAcceptScreen loading state', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('shows Accept as busy and disables Decline while joining', async () => {
+    mockedUseAuth.mockReturnValue({ isAuthenticated: true, loading: false });
+    mockedApi.validateInvite.mockResolvedValue(invite);
+    let finish!: (value: { room_id: number; message: string }) => void;
+    mockedApi.acceptInvite.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+
+    renderScreen();
+    await waitFor(() => expect(screen.getByText('Room Invitation')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('Accept'));
+
+    const accept = () => screen.getByRole('button', { name: /Accept/ });
+    const decline = () => screen.getByRole('button', { name: /Decline/ });
+    await waitFor(() => expect(accept().props.accessibilityState.busy).toBe(true));
+    expect(decline().props.accessibilityState.disabled).toBe(true);
+
+    fireEvent.press(screen.getByText('Decline'));
+    expect(mockedApi.rejectInvite).not.toHaveBeenCalled();
+
+    await act(async () => {
+      finish({ room_id: 10, message: 'Joined' });
+    });
   });
 });

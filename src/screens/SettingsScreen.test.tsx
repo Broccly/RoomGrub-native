@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import SettingsScreen from './SettingsScreen';
 import { renderWithProviders, makeNavigationMock } from '../test-utils/renderWithProviders';
 import { useAuth } from '../hooks/useAuth';
@@ -69,5 +69,29 @@ describe('SettingsScreen', () => {
     fireEvent.press(screen.getByText('Activity History'));
 
     expect(navigation.navigate).toHaveBeenCalledWith('ActivityHistory', { room_id: 10 });
+  });
+});
+
+describe('SettingsScreen delete room loading state', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedUseAuth.mockReturnValue({ logout: jest.fn().mockResolvedValue(undefined) });
+    mockedUseUserRole.mockReturnValue({ role: 'Admin' });
+  });
+
+  it('shows Delete Room as busy while the delete request is in flight', async () => {
+    let finish!: () => void;
+    mockedApi.deleteRoom.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)));
+
+    renderWithProviders(<SettingsScreen navigation={makeNavigationMock()} route={route} />);
+    fireEvent.press(screen.getByText('Delete Room'));
+
+    const button = () => screen.getByRole('button', { name: /Delete Room/ });
+    await waitFor(() => expect(button().props.accessibilityState.busy).toBe(true));
+    expect(mockedApi.deleteRoom).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finish();
+    });
   });
 });

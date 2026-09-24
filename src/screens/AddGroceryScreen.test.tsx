@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import AddGroceryScreen from './AddGroceryScreen';
 import { renderWithProviders } from '../test-utils/renderWithProviders';
 import useUserRole from '../hooks/useUserRole';
@@ -96,5 +96,35 @@ describe('AddGroceryScreen participant selector', () => {
     fireEvent.press(screen.getByText('Done'));
 
     expect(screen.getByText('Everyone')).toBeTruthy();
+  });
+});
+
+describe('AddGroceryScreen submit loading state', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedUseUserRole.mockReturnValue({ role: 'Member' });
+    mockedUseAuth.mockReturnValue({ user: mockUser });
+    mockedApi.listMembers.mockResolvedValue(mockMembers);
+  });
+
+  it('is busy while the expense is being saved and ignores a second tap', async () => {
+    let finish!: (value: unknown) => void;
+    mockedApi.createExpense.mockReturnValue(new Promise((resolve) => (finish = resolve)) as never);
+
+    renderWithProviders(<AddGroceryScreen route={route} />);
+    await waitFor(() => expect(screen.getByPlaceholderText('What did you buy?')).toBeTruthy());
+
+    fireEvent.changeText(screen.getByTestId('amount-input-ADD EXPENSE'), '50');
+    fireEvent.changeText(screen.getByPlaceholderText('What did you buy?'), 'Milk');
+    fireEvent.press(getAddGroceryButton());
+    fireEvent.press(getAddGroceryButton());
+
+    await waitFor(() => expect(getAddGroceryButton().props.accessibilityState.busy).toBe(true));
+    expect(mockedApi.createExpense).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finish({});
+    });
+    await waitFor(() => expect(getAddGroceryButton().props.accessibilityState.busy).toBe(false));
   });
 });
