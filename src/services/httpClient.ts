@@ -1,4 +1,5 @@
 import { getToken, clearToken, clearUser } from '../utils/tokenStorage';
+import { setAuthBootstrap } from '../utils/authBootstrap';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 const REQUEST_TIMEOUT_MS = 15000;
@@ -59,6 +60,10 @@ export async function request<T>(
   if (response.status === 401) {
     await clearToken();
     await clearUser();
+    // Screens mounted after this (e.g. Login) read auth state from the cached
+    // bootstrap — leaving the old user there bounces them straight back into
+    // AuthCallback and loops until the app is killed.
+    setAuthBootstrap({ token: null, user: null });
     onUnauthorized?.();
     throw new Error('Session expired');
   }

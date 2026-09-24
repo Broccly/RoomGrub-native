@@ -94,4 +94,27 @@ describe('useAuth', () => {
     expect(result.current.user).toBeNull();
     expect(result.current.isAuthenticated).toBe(false);
   });
+
+  it('a screen mounted after a 401 (e.g. Login) sees the user as signed out', async () => {
+    mockedTokenStorage.getToken.mockResolvedValue('jwt-abc');
+    mockedTokenStorage.getUser.mockResolvedValue(mockUser);
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 401,
+      ok: false,
+      json: () => Promise.resolve({}),
+    } as Response);
+
+    const first = renderHook(() => useAuth());
+    await waitFor(() => expect(first.result.current.isAuthenticated).toBe(true));
+
+    await act(async () => {
+      await httpClient.request('/rooms', 'GET').catch(() => undefined);
+    });
+
+    const next = renderHook(() => useAuth());
+    await waitFor(() => expect(next.result.current.loading).toBe(false));
+
+    expect(next.result.current.user).toBeNull();
+    expect(next.result.current.isAuthenticated).toBe(false);
+  });
 });

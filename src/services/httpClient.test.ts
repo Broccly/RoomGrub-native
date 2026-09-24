@@ -1,5 +1,6 @@
 import { request, setUnauthorizedHandler } from './httpClient';
 import * as tokenStorage from '../utils/tokenStorage';
+import { getAuthBootstrap, setAuthBootstrap } from '../utils/authBootstrap';
 
 jest.mock('../utils/tokenStorage');
 
@@ -62,6 +63,16 @@ describe('httpClient.request', () => {
     expect(mockedTokenStorage.clearToken).toHaveBeenCalled();
     expect(mockedTokenStorage.clearUser).toHaveBeenCalled();
     expect(handler).toHaveBeenCalled();
+  });
+
+  it('resets the cached auth bootstrap on 401', async () => {
+    setAuthBootstrap({ token: 'stale-token', user: { id: 1, email: 'a@b.c', name: null, profile: null } });
+    mockedTokenStorage.getToken.mockResolvedValueOnce('stale-token');
+    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse({}, 401));
+
+    await expect(request('/rooms', 'GET')).rejects.toThrow('Session expired');
+
+    await expect(getAuthBootstrap()).resolves.toEqual({ token: null, user: null });
   });
 
   it('returns undefined for 204 responses', async () => {
