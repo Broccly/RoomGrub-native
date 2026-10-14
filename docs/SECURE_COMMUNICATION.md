@@ -26,13 +26,13 @@ directly, with the env file (not source) as the place that differs per environme
 
 ## Token storage
 
-- Store the backend-issued JWT in `expo-secure-store` (Keychain on iOS, Keystore on
-  Android). `expo-secure-store` is not currently a dependency — add it as part of the
-  auth migration.
-- Do **not** reuse `AsyncStorage` for the JWT the way the current Supabase client does
+- Store the backend-issued refresh token in `expo-secure-store` (Keychain on iOS,
+  Keystore on Android). The access JWT is kept in memory only and never written to
+  disk.
+- Do **not** reuse `AsyncStorage` for tokens
   for its session (`src/utils/supabase.ts`) — AsyncStorage is unencrypted on-device
   storage.
-- Never log the JWT or provider tokens (no `console.log` of request headers/bodies that
+- Never log the access, refresh or provider tokens (no `console.log` of request headers/bodies that
   include `Authorization` or `token` fields).
 
 ## What the app does and doesn't need
@@ -42,7 +42,7 @@ directly, with the env file (not source) as the place that differs per environme
   backend's flow, since it verifies provider tokens directly rather than doing its own
   OAuth code exchange).
 - The backend's `JWT_SECRET` is exclusively server-side; the app never sees or needs it
-  — it only ever presents the JWT it was issued, as an opaque bearer token.
+  — it only ever presents the access JWT it was issued, as an opaque bearer token.
 
 ## Request hygiene
 
@@ -57,7 +57,6 @@ directly, with the env file (not source) as the place that differs per environme
 - No HTTPS enforcement at the app layer (assumed to be handled by whatever reverse
   proxy/hosting sits in front of `uvicorn` in production — verify this before shipping).
 - No rate limiting or additional security middleware beyond a CORS allow-list.
-- No refresh-token endpoint (see [AUTH.md](./AUTH.md)).
 
 These are worth raising with whoever owns `RoomGrub-backend` before a production launch;
 they're out of scope for native-app-side documentation but directly affect what "secure

@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { clearToken, clearUser, getToken, getUser, setToken, setUser, StoredUser } from './tokenStorage';
+import { clearRefreshToken, clearUser, getRefreshToken, getUser, setRefreshToken, setUser, StoredUser } from './tokenStorage';
 
 const mockUser: StoredUser = { id: 1, email: 'alice@example.com', name: 'Alice', profile: null };
 
@@ -11,19 +11,25 @@ describe('tokenStorage on native', () => {
     (Platform as any).OS = 'android';
   });
 
-  it('setToken/getToken use SecureStore', async () => {
-    await setToken('jwt-abc');
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('roomgrub_jwt', 'jwt-abc');
+  it('setRefreshToken/getRefreshToken use SecureStore', async () => {
+    await setRefreshToken('refresh-abc');
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('roomgrub_refresh_token', 'refresh-abc');
 
-    (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce('jwt-abc');
-    await expect(getToken()).resolves.toBe('jwt-abc');
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce('refresh-abc');
+    await expect(getRefreshToken()).resolves.toBe('refresh-abc');
+    expect(SecureStore.getItemAsync).toHaveBeenCalledWith('roomgrub_refresh_token');
   });
 
-  it('clearToken/clearUser delete from SecureStore', async () => {
-    await clearToken();
+  it('clearRefreshToken/clearUser delete from SecureStore', async () => {
+    await clearRefreshToken();
     await clearUser();
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('roomgrub_jwt');
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('roomgrub_refresh_token');
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('roomgrub_user');
+  });
+
+  it('clearRefreshToken also removes the JWT stored by builds before refresh tokens', async () => {
+    await clearRefreshToken();
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('roomgrub_jwt');
   });
 
   it('setUser/getUser round-trip JSON via SecureStore', async () => {
@@ -50,9 +56,9 @@ describe('tokenStorage on web', () => {
     (Platform as any).OS = 'android';
   });
 
-  it('setToken/getToken use AsyncStorage', async () => {
-    await setToken('jwt-web');
-    await expect(getToken()).resolves.toBe('jwt-web');
-    expect(await AsyncStorage.getItem('roomgrub_jwt')).toBe('jwt-web');
+  it('setRefreshToken/getRefreshToken use AsyncStorage', async () => {
+    await setRefreshToken('refresh-web');
+    await expect(getRefreshToken()).resolves.toBe('refresh-web');
+    expect(await AsyncStorage.getItem('roomgrub_refresh_token')).toBe('refresh-web');
   });
 });
