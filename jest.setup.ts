@@ -74,6 +74,7 @@ jest.mock('react-native-mmkv', () => ({
     return {
       getString: (key: string) => store.get(key) as string | undefined,
       getBoolean: (key: string) => store.get(key) as boolean | undefined,
+      getNumber: (key: string) => store.get(key) as number | undefined,
       set: (key: string, value: unknown) => store.set(key, value),
       remove: (key: string) => store.delete(key),
     };
@@ -87,3 +88,22 @@ jest.mock('@react-native-firebase/messaging', () => ({
   onTokenRefresh: jest.fn(() => jest.fn()),
   setBackgroundMessageHandler: jest.fn(),
 }));
+
+// Play in-app updates: a fresh instance per `new`, reporting no update by default.
+jest.mock('sp-react-native-in-app-updates', () => {
+  const types = jest.requireActual('sp-react-native-in-app-updates/lib/commonjs/types');
+  return {
+    __esModule: true,
+    IAUInstallStatus: types.AndroidInstallStatus,
+    IAUUpdateKind: types.AndroidUpdateType,
+    default: jest.fn().mockImplementation(() => ({
+      checkNeedsUpdate: jest.fn(() => Promise.resolve({ shouldUpdate: false, other: {} })),
+      startUpdate: jest.fn(() => Promise.resolve()),
+      installUpdate: jest.fn(),
+      addStatusUpdateListener: jest.fn(),
+      removeStatusUpdateListener: jest.fn(),
+      addIntentSelectionListener: jest.fn(),
+      removeIntentSelectionListener: jest.fn(),
+    })),
+  };
+});
