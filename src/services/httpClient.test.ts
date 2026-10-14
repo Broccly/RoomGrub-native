@@ -261,5 +261,27 @@ describe('httpClient.request', () => {
       expect(mockedTokenStorage.setRefreshToken).not.toHaveBeenCalled();
       expect(fetchMock()).toHaveBeenCalledTimes(1);
     });
+
+    it("a 401 that lands after sign-out and a new sign-in is not replayed as the new user", async () => {
+      await setSession(tokenPair(1));
+      let resolveRequest: (response: Response) => void = () => {};
+      fetchMock().mockImplementationOnce(() => new Promise<Response>((resolve) => (resolveRequest = resolve)));
+      const handler = jest.fn();
+      setUnauthorizedHandler(handler);
+
+      const pending = request('/rooms/1/expenses', 'POST', { payload: { amount: 100 } });
+      const outcome = expect(pending).rejects.toThrow('Session expired');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await clearSession();
+      await setSession(tokenPair(2));
+      jest.clearAllMocks();
+      resolveRequest(jsonResponse({ detail: 'Token revoked' }, 401));
+      await outcome;
+
+      expect(fetchMock()).not.toHaveBeenCalled();
+      expect(handler).not.toHaveBeenCalled();
+      expect(mockedTokenStorage.clearRefreshToken).not.toHaveBeenCalled();
+      expect(mockedTokenStorage.clearUser).not.toHaveBeenCalled();
+    });
   });
 });

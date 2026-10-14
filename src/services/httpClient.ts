@@ -125,10 +125,14 @@ export async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const authenticated = options.auth !== false;
+  const epoch = sessionEpoch;
   let token = authenticated ? await getAccessToken() : null;
   let response = await send(path, method, options, token);
 
   if (authenticated && response.status === 401) {
+    // Signed out (and maybe in as someone else) while this was in flight:
+    // neither replay it under the new session nor tear that session down.
+    if (epoch !== sessionEpoch) throw new Error('Session expired');
     if (token) {
       // Unless a concurrent request already replaced it, the token we sent is dead.
       if (accessToken === token) accessToken = null;
