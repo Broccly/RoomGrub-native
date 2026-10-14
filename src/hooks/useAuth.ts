@@ -54,7 +54,7 @@ export function useAuth() {
       }
     }
     // Revoke this device's session on the backend; local sign-out doesn't wait for it.
-    const refreshToken = await tokenStorage.getRefreshToken();
+    const refreshToken = await tokenStorage.getRefreshToken().catch(() => null);
     if (refreshToken) authApi.logout(refreshToken).catch(() => {});
     await clearSession();
     // LoginScreen clears the query cache once it mounts, after the signed-in
