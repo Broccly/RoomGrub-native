@@ -83,10 +83,11 @@ All of this lives in `src/services/httpClient.ts`; screens and `api.ts` never se
 - **Single flight.** The backend rotates the refresh token on every call, so all
   concurrent requests share one in-flight refresh. Never call `/auth/refresh` from
   anywhere else.
-- **End of session.** Only a `401` from `/auth/refresh` (or a `401` on the retried
-  request) signs the user out: both tokens and the stored user are cleared and the
-  handler registered by `useAuth` routes to Login. A network error or 5xx during
-  refresh fails that request but keeps the session.
+- **End of session.** A `401` from `/auth/refresh`, an initial authenticated `401`
+  with no token available, or a `401` on the retry signs the user out: both tokens
+  and the stored user are cleared; the handler registered by `useAuth` routes to
+  Login. A network error or 5xx during refresh fails the request but keeps the
+  session.
 - **Logout.** `useAuth.logout()` unregisters the FCM token, then calls
   `POST /auth/logout` with the refresh token (best-effort, not awaited) and clears the
   session locally. Only this device is signed out.
