@@ -1,0 +1,25 @@
+diff --git a/node_modules/sp-react-native-in-app-updates/android/src/main/java/com/sudoplz/rninappupdates/SpReactNativeInAppUpdatesModule.java b/node_modules/sp-react-native-in-app-updates/android/src/main/java/com/sudoplz/rninappupdates/SpReactNativeInAppUpdatesModule.java
+index 3429b20..433f944 100644
+--- a/node_modules/sp-react-native-in-app-updates/android/src/main/java/com/sudoplz/rninappupdates/SpReactNativeInAppUpdatesModule.java
++++ b/node_modules/sp-react-native-in-app-updates/android/src/main/java/com/sudoplz/rninappupdates/SpReactNativeInAppUpdatesModule.java
+@@ -101,6 +101,8 @@ public class SpReactNativeInAppUpdatesModule extends ReactContextBaseJavaModule
+             WritableMap map = Arguments.createMap();
+             int availability = appUpdateInfo.updateAvailability();
+             map.putInt("updateAvailability", availability);
++            // A flexible update may have finished downloading while the app was killed.
++            map.putInt("installStatus", appUpdateInfo.installStatus());
+             map.putBoolean("isImmediateUpdateAllowed", appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE));
+             map.putBoolean("isFlexibleUpdateAllowed", appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE));
+             map.putInt("updatePriority", appUpdateInfo.updatePriority());
+diff --git a/node_modules/sp-react-native-in-app-updates/src/types.ts b/node_modules/sp-react-native-in-app-updates/src/types.ts
+index 728ccd1..30bc203 100644
+--- a/node_modules/sp-react-native-in-app-updates/src/types.ts
++++ b/node_modules/sp-react-native-in-app-updates/src/types.ts
+@@ -82,6 +82,7 @@ export enum AndroidUpdateType {
+ 
+ export type AndroidInAppUpdateExtras = {
+   updateAvailability: AndroidAvailabilityStatus;
++  installStatus: AndroidInstallStatus;
+   versionCode: SemverVersionCode;
+   isFlexibleUpdateAllowed: boolean;
+   isImmediateUpdateAllowed: boolean;

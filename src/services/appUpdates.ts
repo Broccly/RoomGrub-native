@@ -59,6 +59,11 @@ export function listenForAppUpdates(): () => void {
         // its versionCode is higher than the installed one, so trust that.
         customVersionComparator: () => 1,
       })) as AndroidNeedsUpdateResponse;
+      // The status event is missed if the download finished while we were killed.
+      if (result.other.installStatus === IAUInstallStatus.DOWNLOADED) {
+        downloaded = true;
+        return promptRestart();
+      }
       if (!result.shouldUpdate || !result.other.isFlexibleUpdateAllowed) return;
 
       const { versionCode } = result.other;
@@ -70,6 +75,8 @@ export function listenForAppUpdates(): () => void {
       offeredVersionCode = versionCode;
       await inAppUpdates.startUpdate({ updateType: IAUUpdateKind.FLEXIBLE });
     } catch (e) {
+      // Play never showed its sheet, so let the next foreground retry.
+      offeredVersionCode = null;
       console.warn('[InAppUpdates] update check failed', e);
     } finally {
       checking = false;

@@ -46,6 +46,14 @@ function nextInstance(Lib: jest.Mock) {
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
+// jest.setup's Alert mock presses "Restart"; make the next alert press "Later".
+function pressLaterOnce() {
+  (Alert.alert as jest.Mock).mockImplementationOnce((...args: unknown[]) => {
+    const buttons = args[2] as Array<{ style?: string; onPress?: () => void }>;
+    buttons.find((b) => b.style === 'cancel')?.onPress?.();
+  });
+}
+
 beforeEach(() => jest.clearAllMocks());
 
 // Starts listening with the given update-check result and returns the mocked
@@ -170,10 +178,41 @@ describe('listenForAppUpdates', () => {
   });
 
   it('re-prompts to restart on the next foreground if the user chose Later', async () => {
-    const { onStatus } = await start(load());
+    const { instance, onStatus } = await start(load());
+    pressLaterOnce();
     onStatus({ status: IAUInstallStatus.DOWNLOADED });
+    expect(instance.installUpdate).not.toHaveBeenCalled();
+
     appStateListener('active');
     expect(Alert.alert).toHaveBeenCalledTimes(2);
+    expect(instance.installUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('prompts to restart when the download finished while the app was killed', async () => {
+    const result = available();
+    Object.assign(result.other, { installStatus: IAUInstallStatus.DOWNLOADED });
+    const { instance, onStatus } = await start(load(), result);
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(instance.startUpdate).not.toHaveBeenCalled();
+
+    // A late status event for the same download doesn't prompt twice.
+    onStatus({ status: IAUInstallStatus.DOWNLOADED });
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries on the next foreground if Play fails to open its sheet', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { listenForAppUpdates, Lib } = load();
+    const instance = nextInstance(Lib);
+    instance.checkNeedsUpdate.mockResolvedValue(available());
+    instance.startUpdate.mockRejectedValueOnce(new Error('Play Store busy'));
+    listenForAppUpdates();
+    await flush();
+
+    appStateListener('active');
+    await flush();
+    expect(instance.startUpdate).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
   });
 
   it('swallows errors from Play', async () => {
