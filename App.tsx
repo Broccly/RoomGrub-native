@@ -11,6 +11,7 @@ import {
   listenForTokenRefresh,
   syncPushToken,
 } from './src/services/pushNotifications';
+import { listenForAppUpdates } from './src/services/appUpdates';
 import { getAuthBootstrap } from './src/utils/authBootstrap';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -24,9 +25,11 @@ export default function App() {
     });
     const stopForeground = listenForForegroundMessages();
     const stopRefresh = listenForTokenRefresh();
+    const stopAppUpdates = listenForAppUpdates();
     return () => {
       stopForeground();
       stopRefresh();
+      stopAppUpdates();
     };
   }, []);
 
