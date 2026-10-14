@@ -106,6 +106,7 @@ function refreshAccessToken(): Promise<string | null> {
       const tokens = (await response.json()) as SessionTokens;
       if (epoch !== sessionEpoch) throw new Error('Session expired');
       await setSession(tokens);
+      if (epoch !== sessionEpoch) throw new Error('Session expired');
       return tokens.access_token;
     })().finally(() => {
       refreshing = null;
