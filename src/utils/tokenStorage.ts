@@ -2,7 +2,9 @@ import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const TOKEN_KEY = 'roomgrub_jwt';
+const REFRESH_TOKEN_KEY = 'roomgrub_refresh_token';
+// Where 1.0.6 and earlier kept the 24h access JWT. Nothing reads it any more.
+const LEGACY_JWT_KEY = 'roomgrub_jwt';
 const USER_KEY = 'roomgrub_user';
 
 export type StoredUser = {
@@ -30,16 +32,18 @@ async function deleteItem(key: string): Promise<void> {
     : SecureStore.deleteItemAsync(key));
 }
 
-export async function getToken(): Promise<string | null> {
-  return getItem(TOKEN_KEY);
+// Only the refresh token is persisted; the access token lives in httpClient's memory.
+export async function getRefreshToken(): Promise<string | null> {
+  return getItem(REFRESH_TOKEN_KEY);
 }
 
-export async function setToken(token: string): Promise<void> {
-  await setItem(TOKEN_KEY, token);
+export async function setRefreshToken(token: string): Promise<void> {
+  await setItem(REFRESH_TOKEN_KEY, token);
 }
 
-export async function clearToken(): Promise<void> {
-  await deleteItem(TOKEN_KEY);
+export async function clearRefreshToken(): Promise<void> {
+  await deleteItem(REFRESH_TOKEN_KEY);
+  await deleteItem(LEGACY_JWT_KEY);
 }
 
 export async function getUser(): Promise<StoredUser | null> {

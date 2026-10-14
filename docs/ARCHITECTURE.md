@@ -46,7 +46,7 @@ Supabase JWTs — despite what that repo's own `docs/AUTH.md`/`docs/ARCHITECTURE
 The backend's actual code (`app/utils/jwt_utils.py`, `app/dependencies/current_user.py`,
 `app/utils/auth_providers.py`) implements a fully independent auth system: it verifies a
 Google/Facebook provider token directly against Google/Facebook's own endpoints, then
-mints its own HS256 JWT. See [AUTH.md](./AUTH.md) for the corrected flow.
+mints its own HS256 access JWT plus a rotating refresh token. See [AUTH.md](./AUTH.md) for the corrected flow.
 
 Once migrated:
 - `@supabase/supabase-js` and the `supabase/` directory (edge functions, local Supabase
@@ -60,7 +60,9 @@ All routes are prefixed `/api/v1`.
 
 | Domain | Method | Path | Notes |
 |---|---|---|---|
-| Auth | POST | `/auth/login` | body `{provider, token}` → `{access_token, token_type, user}`. **Not** `/auth/sync-user` as that repo's stale docs claim. |
+| Auth | POST | `/auth/login` | body `{provider, token}` → `{access_token, token_type, expires_in, refresh_token, user}`. **Not** `/auth/sync-user` as that repo's stale docs claim. |
+| Auth | POST | `/auth/refresh` | body `{refresh_token}` → new `{access_token, token_type, expires_in, refresh_token}`; `401` ends the session. Called only by `httpClient.ts`. |
+| Auth | POST | `/auth/logout` | body `{refresh_token}` → `204`; revokes this device's session |
 | Rooms | GET | `/rooms` | list rooms for current user |
 | Rooms | POST | `/rooms` | create room |
 | Rooms | GET | `/rooms/{room_id}` | home summary |

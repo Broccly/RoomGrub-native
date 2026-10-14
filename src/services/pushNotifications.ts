@@ -7,7 +7,7 @@ import {
   setBackgroundMessageHandler,
 } from '@react-native-firebase/messaging';
 import { api } from './api';
-import { getToken as getAuthToken } from '../utils/tokenStorage';
+import { getRefreshToken } from '../utils/tokenStorage';
 
 const isSupported = Platform.OS === 'android';
 
@@ -27,7 +27,7 @@ async function ensureNotificationPermission(askUser: boolean): Promise<boolean> 
 }
 
 // Sends this device's FCM token to the backend for the logged-in user.
-// Call only once a JWT is stored; failures never propagate. The permission
+// Call only once the user is signed in; failures never propagate. The permission
 // prompt is shown only with askPermission (after joining/creating a room);
 // otherwise we register silently if permission was already granted.
 export async function syncPushToken({ askPermission = false } = {}): Promise<void> {
@@ -41,7 +41,7 @@ export async function syncPushToken({ askPermission = false } = {}): Promise<voi
   }
 }
 
-// Must run before the JWT is cleared on logout, since the request is authenticated.
+// Must run before the session is cleared on logout, since the request is authenticated.
 export async function unregisterPushToken(): Promise<void> {
   if (!isSupported) return;
   try {
@@ -57,7 +57,7 @@ export function listenForTokenRefresh(): () => void {
   if (!isSupported) return () => {};
   return onTokenRefresh(getMessaging(), async (token) => {
     try {
-      if (await getAuthToken()) await api.registerPushToken(token);
+      if (await getRefreshToken()) await api.registerPushToken(token);
     } catch (e) {
       console.warn('[FCM] token refresh sync failed', e);
     }

@@ -14,3 +14,13 @@ describe('authApi.login', () => {
     });
   });
 });
+
+describe('authApi.logout', () => {
+  it('posts the refresh token without auth header', () => {
+    authApi.logout('refresh-abc');
+    expect(mockedRequest).toHaveBeenCalledWith('/auth/logout', 'POST', {
+      payload: { refresh_token: 'refresh-abc' },
+      auth: false,
+    });
+  });
+});

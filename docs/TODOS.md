@@ -19,7 +19,10 @@ reasoning behind each item.
       the new flow; Supabase OAuth redirect handling removed.
 - [x] Centralized `401` handling in `src/services/httpClient.ts`: clears the stored JWT
       and calls a registered callback that `useAuth` uses to flip `isAuthenticated` to
-      false. Still no refresh-token flow (backend gap, unchanged).
+      false.
+- [x] Refresh-token flow: refresh token in `expo-secure-store`, access token in memory,
+      single-flight refresh before expiry and on `401` with one retry, `/auth/logout`
+      on sign-out. Sign-out happens only when `/auth/refresh` returns `401`.
 
 ## API client — done for rooms/members/expenses/splits/invites
 - [x] `EXPO_PUBLIC_API_BASE_URL` + `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` added to root
@@ -76,8 +79,8 @@ product behavior, not just remapping fields — flagged rather than guessed at:
       the `supabase/` directory.
 
 ## Backend dependencies (not native-app work, but blocks native-app work)
-- [ ] Request a refresh-token mechanism from `RoomGrub-backend` — currently a JWT just
-      expires after `JWT_EXPIRY_HOURS` with no renewal path.
+- [x] Refresh-token mechanism in `RoomGrub-backend` (`/auth/refresh`, `/auth/logout`).
+- [ ] `POST /auth/logout-all` in `RoomGrub-backend`, to offer "Sign out of all devices".
 - [ ] Decide whether the backend should own the payments-ledger / equal-share-splits
       computation (recommended, keeps business logic server-side) or whether the
       native app should compose it client-side from existing endpoints.

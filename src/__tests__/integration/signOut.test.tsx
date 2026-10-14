@@ -39,6 +39,12 @@ function jsonResponse(body: unknown, status = 200) {
 
 const fetchMock = jest.fn((url: string, init: RequestInit) => {
   const headers = init.headers as Record<string, string>;
+  if (url.endsWith('/auth/refresh')) {
+    return Promise.resolve(
+      jsonResponse({ access_token: 'jwt-abc', token_type: 'bearer', expires_in: 900, refresh_token: 'refresh-next' }),
+    );
+  }
+  if (url.endsWith('/auth/logout')) return Promise.resolve(jsonResponse(null, 204));
   if (!headers.Authorization) return Promise.resolve(jsonResponse({ detail: 'Not authenticated' }, 401));
   if (url.endsWith('/rooms')) return Promise.resolve(jsonResponse([mockRoom]));
   if (url.endsWith('/members')) return Promise.resolve(jsonResponse(mockMembers));
@@ -72,11 +78,14 @@ describe('manual sign-out', () => {
     loginMounts = 0;
     queryClient.clear();
     __resetAuthBootstrapForTests();
-    let token: string | null = 'jwt-abc';
+    let token: string | null = 'refresh-abc';
     let user: typeof alice | null = alice;
-    mockedTokenStorage.getToken.mockImplementation(async () => token);
+    mockedTokenStorage.getRefreshToken.mockImplementation(async () => token);
+    mockedTokenStorage.setRefreshToken.mockImplementation(async (next) => {
+      token = next;
+    });
     mockedTokenStorage.getUser.mockImplementation(async () => user);
-    mockedTokenStorage.clearToken.mockImplementation(async () => {
+    mockedTokenStorage.clearRefreshToken.mockImplementation(async () => {
       token = null;
     });
     mockedTokenStorage.clearUser.mockImplementation(async () => {
@@ -90,8 +99,11 @@ describe('manual sign-out', () => {
     queryClient.clear();
   });
 
+  // The /auth/* endpoints are public and never carry a bearer.
   function unauthenticatedRequests() {
-    return fetchMock.mock.calls.filter(([, init]) => !(init.headers as Record<string, string>).Authorization);
+    return fetchMock.mock.calls.filter(
+      ([url, init]) => !url.includes('/auth/') && !(init.headers as Record<string, string>).Authorization,
+    );
   }
 
   it('from Settings lands on Login exactly once, with no requests after credentials are cleared', async () => {
