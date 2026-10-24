@@ -26,5 +26,8 @@ export const queryKeys = {
   expenses: (roomId: number, filters?: ExpenseQuery) => ['room', roomId, 'expenses', filters ?? {}] as const,
   expenseDetail: (roomId: number, expenseId: number) => ['room', roomId, 'expense', expenseId] as const,
   splits: (roomId: number) => ['room', roomId, 'splits'] as const,
+  // Home's totals-only fetch: under the splits key, so invalidating splits refreshes it too,
+  // but cached apart from the Splits screen's full response.
+  splitsSummary: (roomId: number) => ['room', roomId, 'splits', 'summary'] as const,
   inviteByToken: (token: string) => ['invite', token] as const,
 };

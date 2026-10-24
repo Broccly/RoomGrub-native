@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { NavigationContainer } from '@react-navigation/native';
+import { InitialState, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { RoomProvider } from '../context/RoomContext';
 import { navigationRef } from './navigationRef';
 import { getAuthBootstrap } from '../utils/authBootstrap';
+import { getLastRoomId } from '../utils/lastRoom';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../services/api';
 import { queryClient, queryKeys } from '../services/queryClient';
@@ -16,14 +17,12 @@ import Avatar from '../components/Avatar';
 import LoginScreen from '../screens/LoginScreen';
 import AuthCallbackScreen from '../screens/AuthCallbackScreen';
 import RoomsListScreen from '../screens/RoomsListScreen';
-import CreateRoomScreen from '../screens/CreateRoomScreen';
 import InviteAcceptScreen from '../screens/InviteAcceptScreen';
 import BottomTabNavigator from './BottomTabNavigator';
 import AddGroceryScreen from '../screens/AddGroceryScreen';
 import MemberDetailScreen from '../screens/MemberDetailScreen';
 import InviteMemberScreen from '../screens/InviteMemberScreen';
 import SettingsScreen from '../screens/SettingsScreen';
-import ActivityHistoryScreen from '../screens/ActivityHistoryScreen';
 import ContactSupportScreen from '../screens/ContactSupportScreen';
 import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 
@@ -47,11 +46,15 @@ const linking = {
   },
 };
 
-type InitialRoute = 'Login' | 'RoomsList' | null;
+type Launch = {
+  routeName: 'Login' | 'RoomsList';
+  // Only set when reopening a room: an explicit initialState overrides linking.
+  resumeState?: InitialState;
+};
 
 export default function AppNavigator() {
   const { user } = useAuth();
-  const [initialRouteName, setInitialRouteName] = useState<InitialRoute>(null);
+  const [launch, setLaunch] = useState<Launch | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -59,11 +62,27 @@ export default function AppNavigator() {
       const { user } = await getAuthBootstrap();
 
       if (!user) {
-        if (mounted) setInitialRouteName('Login');
+        if (mounted) setLaunch({ routeName: 'Login' });
         return;
       }
 
-      if (mounted) setInitialRouteName('RoomsList');
+      // Reopen the last room, with the rooms list underneath for back — unless
+      // the app was cold-started by a deep link (e.g. an invite), which
+      // linking must be left free to route.
+      const lastRoomId = getLastRoomId();
+      const initialUrl = await Linking.getInitialURL().catch(() => null);
+      if (mounted) {
+        setLaunch({
+          routeName: 'RoomsList',
+          resumeState:
+            lastRoomId != null && !initialUrl
+              ? {
+                  index: 1,
+                  routes: [{ name: 'RoomsList' }, { name: 'RoomHome', params: { room_id: lastRoomId } }],
+                }
+              : undefined,
+        });
+      }
 
       // Warm the rooms cache in the background — RoomsListScreen renders from
       // its own useQuery, which paints instantly from the MMKV-persisted
@@ -75,30 +94,33 @@ export default function AppNavigator() {
     };
   }, []);
 
-  // Hide the native splash only after `initialRouteName` has actually
+  // Hide the native splash only after `launch` has actually
   // committed and the real navigator tree is about to paint — hiding it
   // eagerly inside the async bootstrap above races the setState, so the
   // splash disappears a frame before AppNavigator re-renders past its
   // `return null` guard, producing a blank white flash.
   useEffect(() => {
-    if (initialRouteName !== null) {
+    if (launch !== null) {
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [initialRouteName]);
+  }, [launch]);
 
-  if (initialRouteName === null) {
+  if (launch === null) {
     // Native splash screen is still covering the app while we resolve auth.
     return null;
   }
 
   return (
-    <NavigationContainer ref={navigationRef} linking={linking}>
+    <NavigationContainer
+      ref={navigationRef}
+      linking={linking}
+      initialState={launch.resumeState}
+    >
       <RoomProvider>
-        <Stack.Navigator initialRouteName={initialRouteName} screenOptions={{ ...headerStyle }}>
+        <Stack.Navigator initialRouteName={launch.routeName} screenOptions={{ ...headerStyle }}>
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false, animation: 'fade' }} />
           <Stack.Screen name="AuthCallback" component={AuthCallbackScreen} options={{ headerShown: false }} />
           <Stack.Screen name="RoomsList" component={RoomsListScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="CreateRoom" component={CreateRoomScreen} options={{ title: 'Create Room' }} />
           <Stack.Screen name="InviteAccept" component={InviteAcceptScreen} options={{ title: 'Invite' }} />
 
           {/* Main authenticated flow — bottom tab navigator */}
@@ -144,7 +166,6 @@ export default function AppNavigator() {
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
           <Stack.Screen name="ContactSupport" component={ContactSupportScreen} options={{ title: 'Contact Support' }} />
           <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ title: 'Privacy Policy' }} />
-          <Stack.Screen name="ActivityHistory" component={ActivityHistoryScreen} options={{ title: 'Activity History' }} />
         </Stack.Navigator>
       </RoomProvider>
     </NavigationContainer>

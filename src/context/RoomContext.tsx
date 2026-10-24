@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { setLastRoomId } from '../utils/lastRoom';
 
 type RoomContextValue = {
   roomId: number | null;
@@ -14,8 +15,13 @@ export function RoomProvider({
   initialRoomId?: number | null;
   children: React.ReactNode;
 }) {
-  const [roomId, setRoomId] = useState<number | null>(initialRoomId ?? null);
-  const value = useMemo(() => ({ roomId, setRoomId }), [roomId]);
+  const [roomId, setRoomIdState] = useState<number | null>(initialRoomId ?? null);
+  // Remembered so the next launch reopens this room; null (exit/delete) forgets it.
+  const setRoomId = useCallback((id: number | null) => {
+    setLastRoomId(id);
+    setRoomIdState(id);
+  }, []);
+  const value = useMemo(() => ({ roomId, setRoomId }), [roomId, setRoomId]);
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;
 }
