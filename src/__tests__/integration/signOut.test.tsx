@@ -63,7 +63,6 @@ function renderApp() {
               <Stack.Screen name="RoomsList" component={RoomsListScreen} />
               <Stack.Screen name="Settings" component={SettingsScreen} />
               <Stack.Screen name="RoomHome">{() => null}</Stack.Screen>
-              <Stack.Screen name="CreateRoom">{() => null}</Stack.Screen>
             </Stack.Navigator>
           </RoomProvider>
         </NavigationContainer>

@@ -16,23 +16,18 @@ export default function AuthCallbackScreen({ navigation }: any) {
     }
 
     const handleAuth = async () => {
-      try {
-        const pendingToken = consumePendingInviteToken();
-        if (pendingToken) {
-          try {
-            const result = await api.acceptInvite(pendingToken);
-            navigation.replace('RoomHome', { room_id: result.room_id });
-            return;
-          } catch {
-            // fall through to the normal rooms-list routing if the invite failed
-          }
+      const pendingToken = consumePendingInviteToken();
+      if (pendingToken) {
+        try {
+          const result = await api.acceptInvite(pendingToken);
+          navigation.replace('RoomHome', { room_id: result.room_id });
+          return;
+        } catch {
+          // fall through to the rooms list if the invite failed
         }
-
-        const rooms = await api.listRooms();
-        navigation.replace(rooms.length === 0 ? 'CreateRoom' : 'RoomsList');
-      } catch (error) {
-        navigation.replace('Login');
       }
+
+      navigation.replace('RoomsList');
     };
 
     handleAuth();
