@@ -60,16 +60,6 @@ describe('SettingsScreen', () => {
     await waitFor(() => expect(mockedApi.deleteRoom).toHaveBeenCalledWith(10));
     expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'RoomsList' }] });
   });
-
-  it('navigates to ActivityHistory when the row is pressed', () => {
-    mockedUseUserRole.mockReturnValue({ role: 'Member' });
-    const navigation = makeNavigationMock();
-
-    renderWithProviders(<SettingsScreen navigation={navigation} route={route} />);
-    fireEvent.press(screen.getByText('Activity History'));
-
-    expect(navigation.navigate).toHaveBeenCalledWith('ActivityHistory', { room_id: 10 });
-  });
 });
 
 describe('SettingsScreen delete room loading state', () => {

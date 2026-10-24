@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,22 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
+  Animated,
+  PanResponder,
+  Pressable,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import CrossPlatformDatePicker, { CrossPlatformDatePickerHandle } from '../components/CrossPlatformDatePicker';
+import ActionButton from '../components/ActionButton';
+import useUserRole from '../hooks/useUserRole';
+import { useAuth } from '../hooks/useAuth';
+import { showAlert } from '../utils/alert';
 import { formatAmount, formatShortDate, formatMonthYear } from '../utils/format';
 import { api } from '../services/api';
 import { queryKeys } from '../services/queryClient';
@@ -22,10 +33,16 @@ import { ExpenseItem } from '../types/api';
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
+// How far the detail sheet must be dragged down before it closes.
+const SHEET_DISMISS_DISTANCE = 100;
 
 export default function ExpensesScreen({ route }: any) {
   const room_id = Number(route.params.room_id);
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+  const { role } = useUserRole();
+  const { user } = useAuth();
+  const isAdmin = role === 'Admin';
 
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -44,6 +61,17 @@ export default function ExpensesScreen({ route }: any) {
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailExpenseId, setDetailExpenseId] = useState<number | null>(null);
+
+  // Edit mode inside the detail sheet (admins and the payer, unsettled expenses only)
+  const [editing, setEditing] = useState(false);
+  const [editMaterial, setEditMaterial] = useState('');
+  const [editMoney, setEditMoney] = useState('');
+  const [editDate, setEditDate] = useState(() => new Date());
+  const [editParticipantIds, setEditParticipantIds] = useState<number[]>([]);
+  const [editError, setEditError] = useState('');
+  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
+  const editDatePickerRef = useRef<CrossPlatformDatePickerHandle>(null);
+  const sheetY = useRef(new Animated.Value(0)).current;
 
   // Debounce free-text search before it drives a server query, matching the web app.
   useEffect(() => {
@@ -146,6 +174,8 @@ export default function ExpensesScreen({ route }: any) {
   ].filter(Boolean).length;
 
   const handleExpenseClick = (expenseId: number) => {
+    // Start off-screen; onShow slides it up.
+    sheetY.setValue(Dimensions.get('window').height);
     setDetailExpenseId(expenseId);
     setDetailOpen(true);
   };
@@ -153,6 +183,155 @@ export default function ExpensesScreen({ route }: any) {
   const closeDetail = () => {
     setDetailOpen(false);
     setDetailExpenseId(null);
+    setEditing(false);
+    setEditError('');
+  };
+
+  // The sheet and the dimmed backdrop are animated together here (not by Modal's
+  // own slide), so the backdrop fades out with the sheet instead of sliding after it.
+  const backdropOpacity = sheetY.interpolate({
+    inputRange: [0, Dimensions.get('window').height],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  const showSheet = () => {
+    Animated.timing(sheetY, { toValue: 0, duration: 220, useNativeDriver: true }).start();
+  };
+  const dismissDetail = () => {
+    Animated.timing(sheetY, {
+      toValue: Dimensions.get('window').height,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => closeDetailRef.current());
+  };
+
+  // Drag the sheet's top area down to close it; a short drag springs back.
+  const closeDetailRef = useRef(closeDetail);
+  closeDetailRef.current = closeDetail;
+  const dismissDetailRef = useRef(dismissDetail);
+  dismissDetailRef.current = dismissDetail;
+  const sheetPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 4,
+      onPanResponderMove: (_, g) => sheetY.setValue(Math.max(0, g.dy)),
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > SHEET_DISMISS_DISTANCE || g.vy > 1) {
+          dismissDetailRef.current();
+        } else {
+          Animated.spring(sheetY, { toValue: 0, useNativeDriver: true }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(sheetY, { toValue: 0, useNativeDriver: true }).start();
+      },
+    }),
+  ).current;
+
+  const invalidateExpenseData = () => {
+    queryClient.invalidateQueries({ queryKey: ['room', room_id, 'expenses'] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.roomDashboard(room_id) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.roomSummary(room_id) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.splits(room_id) });
+    queryClient.invalidateQueries({ queryKey: ['room', room_id, 'member'] });
+  };
+
+  const updateExpenseMutation = useMutation({
+    mutationFn: (p: { expenseId: number; changes: Parameters<typeof api.updateExpense>[2] }) =>
+      api.updateExpense(room_id, p.expenseId, p.changes),
+    onSuccess: (_data, p) => {
+      invalidateExpenseData();
+      queryClient.invalidateQueries({ queryKey: queryKeys.expenseDetail(room_id, p.expenseId) });
+      setEditing(false);
+    },
+    onError: (error) => {
+      setEditError(error instanceof Error ? error.message : 'Failed to update expense');
+    },
+  });
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: (expenseId: number) => api.deleteExpense(room_id, expenseId),
+    onSuccess: (_data, expenseId) => {
+      dismissDetail();
+      // Drop the cached detail instead of refetching an expense that no longer exists.
+      queryClient.removeQueries({ queryKey: queryKeys.expenseDetail(room_id, expenseId) });
+      invalidateExpenseData();
+    },
+    onError: (error) => {
+      showAlert('Error', error instanceof Error ? error.message : 'Failed to delete expense');
+    },
+  });
+
+  // The backend lets admins and the payer change an unsettled expense, as long as
+  // the payer is still in the room.
+  const payerId = detail?.payer_user_id ?? null;
+  const payerLeft =
+    payerId !== null && membersQuery.data !== undefined && !members.some((m) => m.user_id === payerId);
+  const canEdit =
+    (isAdmin || (payerId !== null && payerId === user?.id)) &&
+    detail !== null &&
+    !detail.settled &&
+    detailError === '' &&
+    !payerLeft;
+
+  const startEdit = () => {
+    if (!detail) return;
+    setEditMaterial(detail.material);
+    setEditMoney(String(detail.money));
+    setEditDate(new Date(detail.created_at));
+    // The payer is always part of the split, which also repairs older expenses that left them out.
+    const ids = detail.participants.map((p) => p.user_id);
+    setEditParticipantIds(payerId === null || ids.includes(payerId) ? ids : [...ids, payerId]);
+    setEditError('');
+    setEditing(true);
+  };
+
+  const toggleEditParticipant = (userId: number) => {
+    if (userId === payerId) return;
+    setEditParticipantIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
+  };
+
+  // Local calendar date, so it never shifts a day across the UTC boundary.
+  const localDate = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+  const saveEdit = () => {
+    if (!detail) return;
+    const money = Number(editMoney);
+    if (!editMaterial.trim() || !editMoney || Number.isNaN(money) || money <= 0) {
+      setEditError('Please enter a valid item name and amount.');
+      return;
+    }
+    // Send only what changed: a money or participant change re-splits the expense,
+    // and resending the date would reset its time to midnight.
+    const changes: Parameters<typeof api.updateExpense>[2] = {};
+    if (editMaterial.trim() !== detail.material) changes.material = editMaterial.trim();
+    if (money !== detail.money) changes.money = money;
+    if (localDate(editDate) !== localDate(new Date(detail.created_at))) changes.created_at = localDate(editDate);
+    const before = [...detail.participants.map((p) => p.user_id)].sort((a, b) => a - b);
+    const after = [...editParticipantIds].sort((a, b) => a - b);
+    if (before.join(',') !== after.join(',')) changes.participant_user_ids = editParticipantIds;
+
+    setEditError('');
+    if (Object.keys(changes).length === 0) {
+      setEditing(false);
+      return;
+    }
+    updateExpenseMutation.mutate({ expenseId: detail.id, changes });
+  };
+
+  const confirmDelete = () => {
+    if (!detail) return;
+    showAlert(
+      'Delete expense?',
+      `${detail.material} — ${formatAmount(detail.money)}, by ${detail.payer_name || 'Unknown'}. This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteExpenseMutation.mutate(detail.id) },
+      ],
+    );
   };
 
   const formatDisplayDate = (d: Date | null) =>
@@ -394,15 +573,47 @@ export default function ExpensesScreen({ route }: any) {
         </View>
       </Modal>
 
-      {/* Expense Detail Modal */}
-      <Modal visible={detailOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 24 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Expense Details</Text>
-              <TouchableOpacity testID="close-expense-detail" onPress={closeDetail}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
+      {/* Expense Detail Modal — drag the top down, tap outside, or press back to close */}
+      <Modal
+        visible={detailOpen}
+        transparent
+        animationType="none"
+        onShow={showSheet}
+        onRequestClose={dismissDetail}
+      >
+        <KeyboardAvoidingView
+          style={styles.sheetOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Animated.View style={[StyleSheet.absoluteFill, styles.sheetBackdrop, { opacity: backdropOpacity }]}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={dismissDetail}
+              accessibilityLabel="Close expense details"
+            />
+          </Animated.View>
+          <Animated.View
+            style={[
+              styles.modalContent,
+              styles.sheet,
+              { paddingBottom: insets.bottom + 24, transform: [{ translateY: sheetY }] },
+            ]}
+          >
+            <View testID="expense-detail-drag-handle" {...sheetPan.panHandlers}>
+              <View style={styles.sheetGrabber} />
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{editing ? 'Edit Expense' : 'Expense Details'}</Text>
+                {canEdit && !editing && (
+                  <TouchableOpacity
+                    style={styles.editBtn}
+                    onPress={startEdit}
+                    accessibilityLabel="Edit expense"
+                    hitSlop={8}
+                  >
+                    <Ionicons name="pencil" size={16} color="#9333ea" />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
             {detailLoading && (
@@ -415,12 +626,119 @@ export default function ExpensesScreen({ route }: any) {
               </View>
             )}
 
-            {!detailLoading && detailError === '' && detail && (
+            {editing && (
+              <View>
+                <Text style={styles.filterLabel}>Item name</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editMaterial}
+                  onChangeText={setEditMaterial}
+                  placeholder="Item name"
+                  placeholderTextColor="#999"
+                  accessibilityLabel="Item name"
+                />
+
+                <Text style={styles.filterLabel}>Amount</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editMoney}
+                  onChangeText={(t) => setEditMoney(t.replace(/[^0-9.]/g, ''))}
+                  keyboardType="decimal-pad"
+                  placeholder="Amount"
+                  placeholderTextColor="#999"
+                  accessibilityLabel="Amount"
+                />
+
+                <Text style={styles.filterLabel}>Date</Text>
+                <TouchableOpacity
+                  style={[styles.dateBtn, styles.dateBtnActive, styles.editDateBtn]}
+                  onPress={() => {
+                    editDatePickerRef.current?.open();
+                    setShowEditDatePicker(true);
+                  }}
+                  accessibilityLabel="Expense date"
+                >
+                  <Ionicons name="calendar-outline" size={16} color="#9333ea" />
+                  <Text style={[styles.dateBtnText, styles.dateBtnTextActive]}>{formatDisplayDate(editDate)}</Text>
+                </TouchableOpacity>
+                <CrossPlatformDatePicker
+                  ref={editDatePickerRef}
+                  isVisible={showEditDatePicker}
+                  mode="date"
+                  date={editDate}
+                  maximumDate={new Date()}
+                  onConfirm={(d) => {
+                    setEditDate(d);
+                    setShowEditDatePicker(false);
+                  }}
+                  onCancel={() => setShowEditDatePicker(false)}
+                />
+
+                <Text style={styles.filterLabel}>Split with</Text>
+                <View style={styles.editSplitChips}>
+                  {members.map((m) => {
+                    const selected = editParticipantIds.includes(m.user_id);
+                    const isPayer = m.user_id === payerId;
+                    const label = m.name || m.email;
+                    return (
+                      <TouchableOpacity
+                        key={m.user_id}
+                        style={[styles.chip, selected && styles.chipActive]}
+                        onPress={() => toggleEditParticipant(m.user_id)}
+                        disabled={isPayer}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: selected, disabled: isPayer }}
+                        accessibilityLabel={isPayer ? `${label} (paid)` : label}
+                      >
+                        <Text style={[styles.chipText, selected && styles.chipTextActive]}>
+                          {isPayer ? `${label} · paid` : label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {editError !== '' && (
+                  <View style={styles.detailErrorBanner}>
+                    <Text style={styles.detailErrorBannerText}>{editError}</Text>
+                  </View>
+                )}
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity style={styles.clearBtn} onPress={() => setEditing(false)}>
+                    <Text style={styles.clearBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <ActionButton
+                    style={styles.applyBtn}
+                    onPress={saveEdit}
+                    loading={updateExpenseMutation.isPending}
+                  >
+                    <Text style={styles.applyBtnText}>Save</Text>
+                  </ActionButton>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={confirmDelete}
+                  disabled={deleteExpenseMutation.isPending}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#dc2626" />
+                  <Text style={styles.deleteBtnText}>Delete expense</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {!editing && !detailLoading && detailError === '' && detail && (
               <View>
                 <Text style={styles.detailMaterial}>{detail.material}</Text>
                 <Text style={styles.detailSubtitle}>
                   {formatAmount(detail.money)} · paid by {detail.payer_name || 'Unknown'}
                 </Text>
+                {isAdmin && payerLeft && !detail.settled && (
+                  <Text style={styles.detailHint}>
+                    The person who paid has left the room, so this expense can't be changed.
+                  </Text>
+                )}
 
                 <Text style={styles.filterLabel}>Participants</Text>
 
@@ -450,8 +768,8 @@ export default function ExpensesScreen({ route }: any) {
                 })}
               </View>
             )}
-          </View>
-        </View>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -704,4 +1022,45 @@ const styles = StyleSheet.create({
   participantName: { fontSize: 14, fontWeight: '600', color: '#333' },
   participantMeta: { fontSize: 12, color: '#666', marginTop: 2 },
   participantNet: { fontSize: 14, fontWeight: '700' },
+  sheetOverlay: { flex: 1, justifyContent: 'flex-end' },
+  sheetBackdrop: { backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: { paddingTop: 10 },
+  sheetGrabber: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#ddd',
+    marginBottom: 14,
+  },
+  editBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f3e8ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editInput: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    marginBottom: 16,
+    color: '#333',
+  },
+  editDateBtn: { flex: 0, marginBottom: 16 },
+  editSplitChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  detailHint: { fontSize: 13, color: '#888', marginTop: -8, marginBottom: 16 },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingVertical: 10,
+  },
+  deleteBtnText: { color: '#dc2626', fontWeight: '600', fontSize: 14 },
 });
