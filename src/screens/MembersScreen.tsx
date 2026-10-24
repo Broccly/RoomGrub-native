@@ -46,6 +46,27 @@ export default function MembersScreen({ navigation, route }: any) {
     },
   });
 
+  const removeMutation = useMutation({
+    mutationFn: (memberId: number) => api.removeMember(room_id, memberId),
+    onSuccess: () => {
+      setEditModal({ open: false, member: null });
+      // Balances, splits and the dashboard all change when someone leaves.
+      queryClient.invalidateQueries({ queryKey: queryKeys.room(room_id) });
+    },
+    onError: (error) => {
+      showAlert('Error', error instanceof Error ? error.message : 'Failed to remove member');
+    },
+  });
+
+  const handleRemove = () => {
+    const member = editModal.member;
+    if (!member) return;
+    showAlert('Remove Member', `Remove ${member.name || member.email} from this room?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => removeMutation.mutate(member.user_id) },
+    ]);
+  };
+
   const handleRoleChange = async (newRole: 'Admin' | 'Member') => {
     if (!editModal.member) return;
     const confirmMessage =
@@ -61,6 +82,8 @@ export default function MembersScreen({ navigation, route }: any) {
       },
     ]);
   };
+
+  const busy = roleMutation.isPending || removeMutation.isPending;
 
   if (membersQuery.isPending) {
     return (
@@ -141,7 +164,7 @@ export default function MembersScreen({ navigation, route }: any) {
       <Modal visible={editModal.open} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Member Role</Text>
+            <Text style={styles.modalTitle}>Edit Member</Text>
             {editModal.member && (
               <>
                 <Text style={styles.modalLabel}>
@@ -151,20 +174,34 @@ export default function MembersScreen({ navigation, route }: any) {
                   Current Role: {editModal.member.role}
                 </Text>
 
-                <TouchableOpacity
-                  style={[styles.roleButton, styles.promoteButton]}
-                  onPress={() => handleRoleChange('Admin')}
-                  disabled={editModal.member.role === 'Admin'}
-                >
-                  <Text style={styles.roleButtonText}>Promote to Admin</Text>
-                </TouchableOpacity>
+                {editModal.member.role === 'Admin' ? (
+                  <TouchableOpacity
+                    style={[styles.roleButton, styles.demoteButton]}
+                    onPress={() => handleRoleChange('Member')}
+                    disabled={busy}
+                  >
+                    <Text style={styles.roleButtonText}>Demote to Member</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.roleButton, styles.promoteButton]}
+                    onPress={() => handleRoleChange('Admin')}
+                    disabled={busy}
+                  >
+                    <Text style={styles.roleButtonText}>Promote to Admin</Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
-                  style={[styles.roleButton, styles.demoteButton]}
-                  onPress={() => handleRoleChange('Member')}
-                  disabled={editModal.member.role === 'Member'}
+                  style={[styles.roleButton, styles.removeButton]}
+                  onPress={handleRemove}
+                  disabled={busy}
                 >
-                  <Text style={styles.roleButtonText}>Demote to Member</Text>
+                  {removeMutation.isPending ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.roleButtonText}>Remove from Room</Text>
+                  )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -253,7 +290,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   promoteButton: { backgroundColor: '#4caf50' },
-  demoteButton: { backgroundColor: '#ef4444' },
+  demoteButton: { backgroundColor: '#f59e0b' },
+  removeButton: { backgroundColor: '#ef4444' },
   roleButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   cancelButton: {
     paddingVertical: 14,
