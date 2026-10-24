@@ -23,6 +23,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import CrossPlatformDatePicker, { CrossPlatformDatePickerHandle } from '../components/CrossPlatformDatePicker';
 import ActionButton from '../components/ActionButton';
+import Avatar from '../components/Avatar';
 import useUserRole from '../hooks/useUserRole';
 import { useAuth } from '../hooks/useAuth';
 import { showAlert } from '../utils/alert';
@@ -30,6 +31,7 @@ import { formatAmount, formatShortDate, formatMonthYear } from '../utils/format'
 import { api } from '../services/api';
 import { queryKeys } from '../services/queryClient';
 import { ExpenseItem } from '../types/api';
+import { colors } from '../theme/colors';
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -675,7 +677,12 @@ export default function ExpensesScreen({ route }: any) {
                 />
 
                 <Text style={styles.filterLabel}>Split with</Text>
-                <View style={styles.editSplitChips}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.editSplitList}
+                  contentContainerStyle={styles.editSplitRow}
+                >
                   {members.map((m) => {
                     const selected = editParticipantIds.includes(m.user_id);
                     const isPayer = m.user_id === payerId;
@@ -683,20 +690,36 @@ export default function ExpensesScreen({ route }: any) {
                     return (
                       <TouchableOpacity
                         key={m.user_id}
-                        style={[styles.chip, selected && styles.chipActive]}
+                        style={styles.editSplitPerson}
                         onPress={() => toggleEditParticipant(m.user_id)}
                         disabled={isPayer}
                         accessibilityRole="checkbox"
                         accessibilityState={{ checked: selected, disabled: isPayer }}
                         accessibilityLabel={isPayer ? `${label} (paid)` : label}
                       >
-                        <Text style={[styles.chipText, selected && styles.chipTextActive]}>
-                          {isPayer ? `${label} · paid` : label}
+                        <View style={[styles.avatarRing, selected ? styles.avatarRingOn : styles.avatarRingOff]}>
+                          <Avatar
+                            uri={m.profile}
+                            label={label}
+                            size={36}
+                            fontSize={14}
+                            backgroundColor={colors.purpleAvatar}
+                            textColor={colors.brand}
+                          />
+                          {selected && (
+                            <View style={styles.checkBadge}>
+                              <Ionicons name="checkmark" size={9} color="#fff" />
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.splitName, !selected && styles.splitNameOff]} numberOfLines={1}>
+                          {label.split(/[\s@]/)[0]}
                         </Text>
+                        {isPayer && <Text style={styles.splitPaid}>paid</Text>}
                       </TouchableOpacity>
                     );
                   })}
-                </View>
+                </ScrollView>
 
                 {editError !== '' && (
                   <View style={styles.detailErrorBanner}>
@@ -1052,7 +1075,28 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   editDateBtn: { flex: 0, marginBottom: 16 },
-  editSplitChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  editSplitList: { marginBottom: 16 },
+  editSplitRow: { gap: 4 },
+  editSplitPerson: { width: 60, alignItems: 'center', gap: 4, paddingVertical: 4 },
+  avatarRing: { borderRadius: 999, padding: 2, borderWidth: 2 },
+  avatarRingOn: { borderColor: colors.brandMid },
+  avatarRingOff: { borderColor: 'transparent', opacity: 0.35 },
+  checkBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.brand,
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splitName: { fontSize: 12, fontWeight: '600', color: colors.textPrimary },
+  splitNameOff: { color: colors.textMuted, textDecorationLine: 'line-through' },
+  splitPaid: { fontSize: 10, color: colors.textMuted, marginTop: -4 },
   detailHint: { fontSize: 13, color: '#888', marginTop: -8, marginBottom: 16 },
   deleteBtn: {
     flexDirection: 'row',

@@ -196,6 +196,20 @@ describe('ExpensesScreen edit/delete', () => {
     );
   });
 
+  it('shows each member in the split by first name', async () => {
+    mockedApi.listMembers.mockResolvedValue([
+      { ...mockMembers[0], name: 'Alice Smith' },
+      { ...mockMembers[1], name: null as any },
+    ]);
+    await openDetail();
+    fireEvent.press(screen.getByLabelText('Edit expense'));
+
+    expect(screen.getByText('Alice')).toBeTruthy();
+    expect(screen.getByText('paid')).toBeTruthy();
+    // No name: the email's local part stands in.
+    expect(screen.getByText('bob')).toBeTruthy();
+  });
+
   it('adds a payer missing from an older split back in when saving', async () => {
     mockedApi.getExpenseDetail.mockResolvedValue({
       ...mockExpenseDetail,
