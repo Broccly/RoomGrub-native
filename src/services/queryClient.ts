@@ -24,6 +24,8 @@ export const queryKeys = {
   members: (roomId: number) => ['room', roomId, 'members'] as const,
   memberDetail: (roomId: number, memberId: number) => ['room', roomId, 'member', memberId] as const,
   expenses: (roomId: number, filters?: ExpenseQuery) => ['room', roomId, 'expenses', filters ?? {}] as const,
+  // Under the expenses key, so every expense invalidation refreshes the suggestions too.
+  frequentItems: (roomId: number) => ['room', roomId, 'expenses', 'frequent'] as const,
   expenseDetail: (roomId: number, expenseId: number) => ['room', roomId, 'expense', expenseId] as const,
   splits: (roomId: number) => ['room', roomId, 'splits'] as const,
   // Home's totals-only fetch: under the splits key, so invalidating splits refreshes it too,

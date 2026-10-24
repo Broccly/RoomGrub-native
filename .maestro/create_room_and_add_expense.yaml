@@ -4,10 +4,14 @@ appId: com.roomgrub.app
 ---
 - launchApp:
     clearState: false
+# Launch reopens the last room; step back to the rooms list underneath it.
+- runFlow:
+    when:
+      notVisible: "Your Rooms"
+    commands:
+      - back
 - assertVisible: "Your Rooms"
 - tapOn: "New Room"
-- assertVisible: "Create Your First Room"
-- tapOn: "Create New Room"
 - assertVisible:
     text: "RoomGrub"
     timeout: 10000
@@ -19,13 +23,14 @@ appId: com.roomgrub.app
     text: "Add"
     optional: true
 
-- tapOn: "What did you buy?"
-- inputText: "Milk"
 - tapOn:
-    id: "amount-input-ADD GROCERY"
+    id: "amount-input-ADD EXPENSE"
 - inputText: "50"
-- tapOn: "Add Grocery"
-- assertVisible: "Grocery added!"
+- tapOn: "What was it for?"
+- inputText: "Milk"
+- tapOn: "Add ₹50"
+- assertVisible: "Added ₹50 · Milk"
+- back
 
 - tapOn: "Expenses"
 - assertVisible: "Milk"

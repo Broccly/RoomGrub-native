@@ -1,32 +1,39 @@
-import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   Modal,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  useWindowDimensions,
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
-import ActionButton from '../components/ActionButton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import ActionButton from '../components/ActionButton';
 import CrossPlatformDatePicker, { CrossPlatformDatePickerHandle } from '../components/CrossPlatformDatePicker';
+import Avatar from '../components/Avatar';
 import useUserRole from '../hooks/useUserRole';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../services/api';
 import { queryKeys } from '../services/queryClient';
-import { UserSummary } from '../types/api';
+import { ExpenseItem } from '../types/api';
 import { colors } from '../theme/colors';
-import Avatar from '../components/Avatar';
+import { formatAmount } from '../utils/format';
+
+// Suggestions are the room's most-used items, ranked by the backend; a new room
+// is padded with these so the row is never empty.
+const STARTER_ITEMS = ['Milk', 'Water can', 'Vegetables', 'Groceries', 'Gas', 'Electricity'];
+const FREQUENT_ITEM_COUNT = 6;
+const TOAST_MS = 4000;
+
+const INITIAL_WINDOW_HEIGHT = Dimensions.get('window').height;
+const ACTION_BAR_RESERVED_HEIGHT = 200;
 
 function formatAmountDisplay(raw: string): string {
   if (!raw) return '';
@@ -39,159 +46,311 @@ function sanitizeAmountInput(text: string): string {
   const cleaned = text.replace(/[^0-9.]/g, '');
   const [intPart, ...rest] = cleaned.split('.');
   const cappedInt = intPart.slice(0, 5);
-  return rest.length > 0 ? `${cappedInt}.${rest.join('')}` : cappedInt;
+  return rest.length > 0 ? `${cappedInt}.${rest.join('').slice(0, 2)}` : cappedInt;
 }
 
-function formatDateLabel(date: Date): string {
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+// Appends each comma-separated entry of `raw` to `list`, skipping blanks and
+// case-insensitive duplicates.
+function addItems(list: string[], raw: string): string[] {
+  const out = [...list];
+  raw
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .forEach((t) => {
+      if (!out.some((x) => x.toLowerCase() === t.toLowerCase())) out.push(t);
+    });
+  return out;
 }
 
-function ParticipantPicker({
-  members,
-  selectedIds,
-  onToggle,
-  onOpen,
-  visible,
-  onClose,
-  lockedUserId,
-  narrow,
-}: {
-  members: UserSummary[];
-  selectedIds: number[];
-  onToggle: (userId: number) => void;
-  onOpen: () => void;
-  visible: boolean;
-  onClose: () => void;
-  lockedUserId?: number;
-  narrow?: boolean;
-}) {
-  return (
-    <>
-      <TouchableOpacity style={[styles.pillBtn, narrow && styles.pillBtnNarrow]} onPress={onOpen}>
-        <Ionicons name="people-outline" size={16} color={colors.brand} />
-        <Text style={styles.pillBtnText} numberOfLines={1}>
-          {selectedIds.length === members.length ? 'Everyone' : `${selectedIds.length} people`}
-        </Text>
-      </TouchableOpacity>
-
-      <Modal visible={visible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Split Between</Text>
-              <TouchableOpacity onPress={onClose}>
-                <Text style={styles.closeBtn}>X</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView>
-              {members.map((member) => (
-                <TouchableOpacity
-                  key={member.user_id}
-                  style={styles.participantRow}
-                  onPress={() => onToggle(member.user_id)}
-                  disabled={member.user_id === lockedUserId}
-                >
-                  <Ionicons
-                    name={selectedIds.includes(member.user_id) ? 'checkbox' : 'square-outline'}
-                    size={22}
-                    color={member.user_id === lockedUserId ? colors.purpleAvatarBorder : colors.brand}
-                  />
-                  <Avatar
-                    uri={member.profile}
-                    label={member.name || member.email}
-                    size={28}
-                    fontSize={14}
-                    backgroundColor={colors.purpleAvatar}
-                    textColor={colors.textSecondary}
-                    style={styles.friendAvatarFallback}
-                  />
-                  <Text style={styles.label}>{member.name || member.email}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity style={styles.submitWrap} onPress={onClose}>
-              <LinearGradient colors={[colors.brand, colors.brandDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.submitGradient}>
-                <Text style={styles.submitText}>Done</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </>
-  );
+function toLocalDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
-export type GroceryHeroFormHandle = {
-  focusAmount: () => void;
+type FormSnapshot = {
+  amount: string;
+  items: string[];
+  payerId: number | null;
+  participantIds: number[];
+  date: Date;
 };
 
-const GroceryHeroForm = React.forwardRef<GroceryHeroFormHandle, {
-  title: string;
-  amount: string;
-  onAmountChange: (t: string) => void;
-  description: string;
-  onDescriptionChange: (t: string) => void;
-  date: Date | null;
-  onDatePress: () => void;
-  onClearDate: () => void;
-  participantSlot: React.ReactNode;
-  friendSlot?: React.ReactNode;
-  onSubmit: () => void;
-  loading: boolean;
-  msg: string;
-  submitLabel: string;
-  pinBottom?: boolean;
-  bottomInset?: number;
-  narrow?: boolean;
-}>(function GroceryHeroForm({
-  title,
-  amount,
-  onAmountChange,
-  description,
-  onDescriptionChange,
-  date,
-  onDatePress,
-  onClearDate,
-  participantSlot,
-  friendSlot,
-  onSubmit,
-  loading,
-  msg,
-  submitLabel,
-  pinBottom,
-  bottomInset = 0,
-  narrow = false,
-}, ref) {
-  const [descFocused, setDescFocused] = useState(false);
-  const [amountWidth, setAmountWidth] = useState(40);
+type Toast = { text: string; expenseId: number; snapshot: FormSnapshot };
+
+export default function AddGroceryScreen({ route }: any) {
+  const room_id = Number(route.params.room_id);
+  const { role } = useUserRole();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const isAdmin = role === 'Admin';
+
   const amountInputRef = useRef<TextInput>(null);
-  const descriptionInputRef = useRef<TextInput>(null);
+  const datePickerRef = useRef<CrossPlatformDatePickerHandle>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useImperativeHandle(ref, () => ({
-    focusAmount: () => amountInputRef.current?.focus(),
-  }));
-  const canSubmit = description.trim().length > 0 && parseFloat(amount || '0') > 0;
-  const isSuccess = !msg.startsWith('❌');
-  const amountDisplay = formatAmountDisplay(amount);
+  useEffect(() => {
+    const unsubscribe = (navigation as any).addListener('transitionEnd', () => {
+      amountInputRef.current?.focus();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
-  const submitButton = (
-    <ActionButton
-      testID={`submit-button-${title}`}
-      style={[styles.submitWrap, styles.submitGradient]}
-      gradientColors={canSubmit ? [colors.brand, colors.brandDark] : [colors.textMuted, colors.textMuted]}
-      onPress={onSubmit}
-      loading={loading}
-      disabled={!canSubmit}
-    >
-      <Text style={styles.submitText}>{submitLabel}</Text>
-    </ActionButton>
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
+
+  const membersQuery = useQuery({
+    queryKey: queryKeys.members(room_id),
+    queryFn: () => api.listMembers(room_id),
+  });
+  // The person adding comes first so the split row reads "You, …".
+  const members = [...(membersQuery.data ?? [])].sort(
+    (a, b) => Number(b.user_id === user?.id) - Number(a.user_id === user?.id),
   );
 
-  return (
-    <View style={pinBottom && styles.pageWrap}>
-      <Text style={styles.eyebrow}>{title}</Text>
+  const frequentQuery = useQuery({
+    queryKey: queryKeys.frequentItems(room_id),
+    queryFn: () => api.getFrequentItems(room_id, FREQUENT_ITEM_COUNT),
+    select: (data) => addItems(data.items, STARTER_ITEMS.join(',')).slice(0, FREQUENT_ITEM_COUNT),
+  });
+  const frequentItems = frequentQuery.data ?? STARTER_ITEMS;
 
-      <View style={pinBottom && styles.middleGroup}>
+  const [amount, setAmount] = useState('');
+  const [amountWidth, setAmountWidth] = useState(40);
+  const [items, setItems] = useState<string[]>([]);
+  const [draft, setDraft] = useState('');
+  const [payerId, setPayerId] = useState<number | null>(user?.id ?? null);
+  const [participantIds, setParticipantIds] = useState<number[]>([]);
+  const [date, setDate] = useState(() => new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [payerMenuOpen, setPayerMenuOpen] = useState(false);
+  const [error, setError] = useState('');
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  // useAuth loads the user asynchronously, so default the payer to "You" once it arrives.
+  useEffect(() => {
+    if (user?.id != null) setPayerId((prev) => prev ?? user.id);
+  }, [user?.id]);
+
+  const allMemberIds = () =>(membersQuery.data ?? []).map((m) => m.user_id);
+
+  useEffect(() => {
+    if (!membersQuery.data?.length) return;
+    setParticipantIds(allMemberIds());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [membersQuery.data]);
+
+  const invalidateExpenseData = () => {
+    queryClient.invalidateQueries({ queryKey: ['room', room_id, 'expenses'] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.roomDashboard(room_id) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.roomSummary(room_id) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.splits(room_id) });
+    queryClient.invalidateQueries({ queryKey: ['room', room_id, 'member'] });
+  };
+
+  const resetForm = () => {
+    setAmount('');
+    setItems([]);
+    setDraft('');
+    setPayerId(user?.id ?? null);
+    setParticipantIds(allMemberIds());
+    setDate(new Date());
+  };
+
+  const nameOf = (userId: number | null) => {
+    const m = members.find((x) => x.user_id === userId);
+    return m ? m.name || m.email : '';
+  };
+
+  const addExpenseMutation = useMutation({
+    mutationFn: ({
+      payload,
+      payer,
+    }: {
+      payload: { material: string; money: number; created_at?: string; participant_user_ids: number[] };
+      payer: number | null;
+      snapshot: FormSnapshot;
+    }): Promise<ExpenseItem> =>
+      payer === user?.id || payer === null
+        ? api.createExpense(room_id, payload)
+        : api.createExpenseForMember(room_id, { ...payload, user_id: payer }),
+    onSuccess: (expense, { payload, payer, snapshot }) => {
+      invalidateExpenseData();
+      resetForm();
+      const forWhom = payer !== null && payer !== user?.id ? ` for ${nameOf(payer)}` : '';
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      setToast({
+        text: `Added ${formatAmount(payload.money)} · ${payload.material}${forWhom}`,
+        expenseId: expense.id,
+        snapshot,
+      });
+      toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Failed to add expense');
+    },
+  });
+
+  const undoMutation = useMutation({
+    mutationFn: (t: Toast) => api.deleteExpense(room_id, t.expenseId),
+    onSuccess: (_data, t) => {
+      invalidateExpenseData();
+      setAmount(t.snapshot.amount);
+      setItems(t.snapshot.items);
+      setDraft('');
+      setPayerId(t.snapshot.payerId);
+      setParticipantIds(t.snapshot.participantIds);
+      setDate(t.snapshot.date);
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Failed to undo');
+    },
+  });
+
+  const commitDraft = () => {
+    if (!draft.trim()) return;
+    setItems((prev) => addItems(prev, draft));
+    setDraft('');
+  };
+
+  const handleDraftChange = (text: string) => {
+    setError('');
+    const lastComma = text.lastIndexOf(',');
+    if (lastComma === -1) {
+      setDraft(text);
+      return;
+    }
+    setItems((prev) => addItems(prev, text.slice(0, lastComma)));
+    setDraft(text.slice(lastComma + 1).trimStart());
+  };
+
+  const toggleSuggestion = (label: string) => {
+    setError('');
+    setItems((prev) =>
+      prev.some((x) => x.toLowerCase() === label.toLowerCase())
+        ? prev.filter((x) => x.toLowerCase() !== label.toLowerCase())
+        : [...prev, label],
+    );
+  };
+
+  const toggleParticipant = (userId: number) => {
+    // The payer always shares in their own expense.
+    if (userId === payerId) return;
+    setParticipantIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
+  };
+
+  const pickPayer = (userId: number) => {
+    setPayerId(userId);
+    setParticipantIds((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
+    setPayerMenuOpen(false);
+  };
+
+  const material = addItems(items, draft).join(', ');
+  const numericAmount = parseFloat(amount || '0') || 0;
+  const canSubmit = numericAmount > 0 && material.length > 0 && participantIds.length > 0;
+  const isToday = toLocalDateString(date) === toLocalDateString(new Date());
+
+  const handleAdd = () => {
+    if (!canSubmit) return;
+    setError('');
+    addExpenseMutation.mutate({
+      payload: {
+        material,
+        money: numericAmount,
+        // Today keeps the server's timestamp; a picked day is sent as a plain
+        // local date so it never shifts across the UTC boundary.
+        created_at: isToday ? undefined : toLocalDateString(date),
+        participant_user_ids: participantIds,
+      },
+      payer: payerId,
+      snapshot: { amount, items: addItems(items, draft), payerId, participantIds, date },
+    });
+  };
+
+  const handleUndo = () => {
+    if (!toast) return;
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(null);
+    undoMutation.mutate(toast);
+  };
+
+  if (membersQuery.isPending) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.brand} />
+      </View>
+    );
+  }
+
+  const amountDisplay = formatAmountDisplay(amount);
+  const perHead = numericAmount > 0 && participantIds.length > 0 ? numericAmount / participantIds.length : 0;
+  const splitLabel =
+    participantIds.length === members.length
+      ? 'Split with everyone'
+      : `Split with ${participantIds.length} of ${members.length}`;
+  const payer = members.find((m) => m.user_id === payerId);
+  const payerLabel = payerId === user?.id ? 'You' : nameOf(payerId);
+  const dateLabel = isToday
+    ? 'Today'
+    : date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  return (
+    <View style={[styles.container, { height: INITIAL_WINDOW_HEIGHT }]}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: ACTION_BAR_RESERVED_HEIGHT + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Split with — always visible so it's clear who this expense is for */}
+        <View style={styles.splitSection}>
+          <View style={styles.splitHeader}>
+            <Text style={styles.fieldLabel}>{splitLabel}</Text>
+            {perHead > 0 && <Text style={styles.perHead}>{formatAmount(perHead)} each</Text>}
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.splitRow}>
+            {members.map((m) => {
+              const selected = participantIds.includes(m.user_id);
+              const label = m.user_id === user?.id ? 'You' : m.name || m.email;
+              return (
+                <TouchableOpacity
+                  key={m.user_id}
+                  style={styles.splitPerson}
+                  onPress={() => toggleParticipant(m.user_id)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: selected, disabled: m.user_id === payerId }}
+                  accessibilityLabel={label}
+                >
+                  <View style={[styles.avatarRing, selected ? styles.avatarRingOn : styles.avatarRingOff]}>
+                    <Avatar
+                      uri={m.profile}
+                      label={m.name || m.email}
+                      size={36}
+                      fontSize={14}
+                      backgroundColor={colors.purpleAvatar}
+                      textColor={colors.brand}
+                    />
+                    {selected && (
+                      <View style={styles.checkBadge}>
+                        <Ionicons name="checkmark" size={9} color="#fff" />
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.splitName, !selected && styles.splitNameOff]} numberOfLines={1}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Amount */}
         <View style={styles.amountRow}>
           <Text style={styles.rupeeSymbol}>₹</Text>
           <Text
@@ -202,476 +361,210 @@ const GroceryHeroForm = React.forwardRef<GroceryHeroFormHandle, {
           </Text>
           <TextInput
             ref={amountInputRef}
-            testID={`amount-input-${title}`}
+            testID="amount-input-ADD EXPENSE"
             style={[styles.amountInput, { width: Math.max(amountWidth, 20) }]}
             value={amountDisplay}
-            onChangeText={(t) => onAmountChange(sanitizeAmountInput(t))}
-            keyboardType="decimal-pad"
-            returnKeyType="next"
-            blurOnSubmit={false}
-            onSubmitEditing={() => {
-              if (parseFloat(amount || '0') > 0) {
-                descriptionInputRef.current?.focus();
-              }
+            onChangeText={(t) => {
+              setError('');
+              setAmount(sanitizeAmountInput(t));
             }}
+            keyboardType="decimal-pad"
             placeholder="0"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={colors.purple200}
+            accessibilityLabel="Amount"
           />
         </View>
 
-        <TextInput
-          ref={descriptionInputRef}
-          style={[styles.descriptionInput, descFocused && styles.descriptionInputFocused]}
-          placeholder="What did you buy?"
-          value={description}
-          onChangeText={onDescriptionChange}
-          onFocus={() => setDescFocused(true)}
-          onBlur={() => setDescFocused(false)}
-          editable={parseFloat(amount || '0') > 0}
-          placeholderTextColor={colors.textMuted}
-          textAlign="center"
-        />
-
-        {msg !== '' && (
-          <View style={[styles.msgPill, isSuccess ? styles.msgPillSuccess : styles.msgPillError]}>
-            <Text style={[styles.msgPillText, isSuccess ? styles.msgPillTextSuccess : styles.msgPillTextError]}>
-              {msg}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {!pinBottom && (
-        <View>
-          <View style={[styles.toolbar, narrow && styles.toolbarNarrow]}>
-            {participantSlot}
-
-            <TouchableOpacity style={[styles.pillBtn, narrow && styles.pillBtnNarrow]} onPress={onDatePress}>
-              <Ionicons name="calendar-outline" size={16} color={colors.brand} />
-              <Text style={styles.pillBtnText} numberOfLines={1}>
-                {date ? formatDateLabel(date) : 'Date'}
-              </Text>
-              {date && (
-                <TouchableOpacity onPress={onClearDate} hitSlop={8}>
-                  <Ionicons name="close-circle" size={16} color={colors.brand} />
-                </TouchableOpacity>
-              )}
-            </TouchableOpacity>
-
-            {friendSlot}
-          </View>
-
-          {submitButton}
-        </View>
-      )}
-    </View>
-  );
-});
-
-function GroceryActionBar({
-  narrow,
-  participantSlot,
-  date,
-  onDatePress,
-  onClearDate,
-  friendSlot,
-  onSubmit,
-  loading,
-  canSubmit,
-  submitLabel,
-  bottomInset,
-}: {
-  narrow: boolean;
-  participantSlot: React.ReactNode;
-  date: Date | null;
-  onDatePress: () => void;
-  onClearDate: () => void;
-  friendSlot?: React.ReactNode;
-  onSubmit: () => void;
-  loading: boolean;
-  canSubmit: boolean;
-  submitLabel: string;
-  bottomInset: number;
-}) {
-  return (
-    <View style={[styles.actionBarWrap, { paddingBottom: bottomInset + 16 }]}>
-      <View style={[styles.toolbar, styles.toolbarInBar, narrow && styles.toolbarNarrow]}>
-        {participantSlot}
-
-        <TouchableOpacity style={[styles.pillBtn, narrow && styles.pillBtnNarrow]} onPress={onDatePress}>
-          <Ionicons name="calendar-outline" size={16} color={colors.brand} />
-          <Text style={styles.pillBtnText} numberOfLines={1}>
-            {date ? formatDateLabel(date) : 'Date'}
-          </Text>
-          {date && (
-            <TouchableOpacity onPress={onClearDate} hitSlop={8}>
-              <Ionicons name="close-circle" size={16} color={colors.brand} />
-            </TouchableOpacity>
-          )}
-        </TouchableOpacity>
-
-        {friendSlot}
-      </View>
-
-      <ActionButton
-        testID="submit-button-ADD EXPENSE"
-        style={[styles.submitWrap, styles.submitGradient]}
-        gradientColors={canSubmit ? [colors.brand, colors.brandDark] : [colors.textMuted, colors.textMuted]}
-        onPress={onSubmit}
-        loading={loading}
-        disabled={!canSubmit}
-      >
-        <Text style={styles.submitText}>{submitLabel}</Text>
-      </ActionButton>
-    </View>
-  );
-}
-
-const INITIAL_WINDOW_HEIGHT = Dimensions.get('window').height;
-const ACTION_BAR_RESERVED_HEIGHT = 180;
-
-export default function AddGroceryScreen({ route }: any) {
-  const room_id = Number(route.params.room_id);
-  const { role } = useUserRole();
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const narrow = width < 380;
-  const navigation = useNavigation();
-  const heroFormRef = useRef<GroceryHeroFormHandle>(null);
-
-  useEffect(() => {
-    const unsubscribe = (navigation as any).addListener('transitionEnd', () => {
-      heroFormRef.current?.focusAmount();
-    });
-    return unsubscribe;
-  }, [navigation]);
-
-  const membersQuery = useQuery({
-    queryKey: queryKeys.members(room_id),
-    queryFn: () => api.listMembers(room_id),
-  });
-  const members = membersQuery.data ?? [];
-  const membersLoading = membersQuery.isPending;
-
-  const [grocery, setGrocery] = useState('');
-  const [price, setPrice] = useState('');
-  const [date, setDate] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [msg, setMsg] = useState('');
-  const [participantIds, setParticipantIds] = useState<number[]>([]);
-  const [showParticipantPicker, setShowParticipantPicker] = useState(false);
-
-  const [showFriendModal, setShowFriendModal] = useState(false);
-  const [selectedFriend, setSelectedFriend] = useState<UserSummary | null>(null);
-  const [friendGrocery, setFriendGrocery] = useState('');
-  const [friendPrice, setFriendPrice] = useState('');
-  const [friendDate, setFriendDate] = useState<Date | null>(null);
-  const [showFriendDatePicker, setShowFriendDatePicker] = useState(false);
-  const [friendMsg, setFriendMsg] = useState('');
-  const [friendParticipantIds, setFriendParticipantIds] = useState<number[]>([]);
-  const [showFriendParticipantPicker, setShowFriendParticipantPicker] = useState(false);
-
-  const datePickerRef = useRef<CrossPlatformDatePickerHandle>(null);
-  const friendDatePickerRef = useRef<CrossPlatformDatePickerHandle>(null);
-
-  useEffect(() => {
-    if (!members.length) return;
-    const allIds = members.map((m) => m.user_id);
-    setParticipantIds(allIds);
-    setFriendParticipantIds(allIds);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [membersQuery.data]);
-
-  const invalidateExpenseData = () => {
-    queryClient.invalidateQueries({ queryKey: ['room', room_id, 'expenses'] });
-    queryClient.invalidateQueries({ queryKey: queryKeys.roomDashboard(room_id) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.roomSummary(room_id) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.splits(room_id) });
-  };
-
-  const addExpenseMutation = useMutation({
-    mutationFn: (payload: { material: string; money: number; created_at?: string; participant_user_ids: number[] }) =>
-      api.createExpense(room_id, payload),
-    onSuccess: () => {
-      invalidateExpenseData();
-      setMsg('🎉 Expense added!');
-      setGrocery('');
-      setPrice('');
-      setDate(null);
-    },
-    onError: (error) => {
-      setMsg(`❌ ${error instanceof Error ? error.message : 'Failed to add expense'}`);
-    },
-  });
-
-  const addExpenseForMemberMutation = useMutation({
-    mutationFn: (payload: {
-      user_id: number;
-      material: string;
-      money: number;
-      created_at?: string;
-      participant_user_ids: number[];
-    }) => api.createExpenseForMember(room_id, payload),
-    onSuccess: (_data, variables) => {
-      invalidateExpenseData();
-      const friend = members.find((m) => m.user_id === variables.user_id);
-      setFriendMsg(`✅ Added for ${friend?.name || friend?.email}`);
-      setSelectedFriend(null);
-      setFriendGrocery('');
-      setFriendPrice('');
-      setFriendDate(null);
-      setTimeout(() => {
-        setShowFriendModal(false);
-        setFriendMsg('');
-      }, 1000);
-    },
-    onError: (error) => {
-      setFriendMsg(`❌ ${error instanceof Error ? error.message : 'Failed to add grocery'}`);
-    },
-  });
-
-  const loading = addExpenseMutation.isPending;
-  const friendLoading = addExpenseForMemberMutation.isPending;
-
-  const toggleParticipant = (userId: number) => {
-    if (userId === user?.id) return;
-    setParticipantIds((prev) =>
-      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
-    );
-  };
-
-  const toggleFriendParticipant = (userId: number) => {
-    if (userId === selectedFriend?.user_id) return;
-    setFriendParticipantIds((prev) =>
-      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
-    );
-  };
-
-  const handleAdd = () => {
-    setMsg('');
-    const numericPrice = Number(price);
-
-    if (!grocery || !price || Number.isNaN(numericPrice) || numericPrice <= 0) {
-      setMsg('❌ Please fill valid grocery and price.');
-      return;
-    }
-    if (participantIds.length === 0) {
-      setMsg('❌ Select at least one participant.');
-      return;
-    }
-
-    addExpenseMutation.mutate({
-      material: grocery.trim(),
-      money: numericPrice,
-      created_at: date ? date.toISOString().split('T')[0] : undefined,
-      participant_user_ids: participantIds,
-    });
-  };
-
-  const handleAddForFriend = () => {
-    setFriendMsg('');
-    const numericPrice = Number(friendPrice);
-
-    if (!selectedFriend) {
-      setFriendMsg('❌ Please select a friend.');
-      return;
-    }
-    if (!friendGrocery || !friendPrice || Number.isNaN(numericPrice) || numericPrice <= 0) {
-      setFriendMsg('❌ Please fill valid grocery and price.');
-      return;
-    }
-    if (friendParticipantIds.length === 0) {
-      setFriendMsg('❌ Select at least one participant.');
-      return;
-    }
-
-    addExpenseForMemberMutation.mutate({
-      user_id: selectedFriend.user_id,
-      material: friendGrocery.trim(),
-      money: numericPrice,
-      created_at: friendDate ? friendDate.toISOString().split('T')[0] : undefined,
-      participant_user_ids: friendParticipantIds,
-    });
-  };
-
-  if (membersLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.brand} />
-      </View>
-    );
-  }
-
-  const participantSlot = (
-    <ParticipantPicker
-      members={members}
-      selectedIds={participantIds}
-      onToggle={toggleParticipant}
-      visible={showParticipantPicker}
-      onOpen={() => setShowParticipantPicker(true)}
-      onClose={() => setShowParticipantPicker(false)}
-      lockedUserId={user?.id}
-      narrow={narrow}
-    />
-  );
-
-  const friendSlot =
-    role === 'Admin' ? (
-      <TouchableOpacity style={[styles.pillBtn, narrow && styles.pillBtnNarrow]} onPress={() => setShowFriendModal(true)}>
-        <Ionicons name="person-add-outline" size={16} color={colors.brand} />
-        <Text style={styles.pillBtnText} numberOfLines={1}>For friend</Text>
-      </TouchableOpacity>
-    ) : undefined;
-
-  const canSubmit = grocery.trim().length > 0 && parseFloat(price || '0') > 0;
-
-  return (
-    <View style={[styles.container, { height: INITIAL_WINDOW_HEIGHT }]}>
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: ACTION_BAR_RESERVED_HEIGHT + insets.bottom }]}
-        keyboardShouldPersistTaps="handled"
-      >
-        <GroceryHeroForm
-          ref={heroFormRef}
-          title="ADD EXPENSE"
-          amount={price}
-          onAmountChange={setPrice}
-          description={grocery}
-          onDescriptionChange={setGrocery}
-          date={date}
-          onDatePress={() => {
-            datePickerRef.current?.open();
-            setShowDatePicker(true);
-          }}
-          onClearDate={() => setDate(null)}
-          participantSlot={participantSlot}
-          friendSlot={friendSlot}
-          onSubmit={handleAdd}
-          loading={loading}
-          msg={msg}
-          submitLabel="Add Expense"
-          pinBottom
-          bottomInset={insets.bottom}
-          narrow={narrow}
-        />
-
-        <CrossPlatformDatePicker
-          ref={datePickerRef}
-          isVisible={showDatePicker}
-          mode="date"
-          date={date ?? new Date()}
-          maximumDate={new Date()}
-          onConfirm={(d) => { setDate(d); setShowDatePicker(false); }}
-          onCancel={() => setShowDatePicker(false)}
-        />
-      </ScrollView>
-
-      <GroceryActionBar
-        narrow={narrow}
-        participantSlot={participantSlot}
-        date={date}
-        onDatePress={() => {
-          datePickerRef.current?.open();
-          setShowDatePicker(true);
-        }}
-        onClearDate={() => setDate(null)}
-        friendSlot={friendSlot}
-        onSubmit={handleAdd}
-        loading={loading}
-        canSubmit={canSubmit}
-        submitLabel="Add Expense"
-        bottomInset={insets.bottom}
-      />
-
-      <Modal visible={showFriendModal} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Grocery for Friend</Text>
-              <TouchableOpacity onPress={() => setShowFriendModal(false)}>
-                <Text style={styles.closeBtn}>X</Text>
+        {/* Description as chips */}
+        <View style={styles.chipField}>
+          {items.map((label) => (
+            <View key={label} style={styles.itemChip}>
+              <Text style={styles.itemChipText}>{label}</Text>
+              <TouchableOpacity
+                onPress={() => setItems((prev) => prev.filter((x) => x !== label))}
+                hitSlop={8}
+                style={styles.itemChipRemove}
+                accessibilityLabel={`Remove ${label}`}
+              >
+                <Ionicons name="close" size={14} color={colors.brandDark} />
               </TouchableOpacity>
             </View>
+          ))}
+          <TextInput
+            style={styles.chipInput}
+            value={draft}
+            onChangeText={handleDraftChange}
+            onSubmitEditing={commitDraft}
+            onBlur={commitDraft}
+            onKeyPress={({ nativeEvent }) => {
+              if (nativeEvent.key === 'Backspace' && draft === '' && items.length > 0) {
+                setItems((prev) => prev.slice(0, -1));
+              }
+            }}
+            blurOnSubmit={false}
+            returnKeyType="done"
+            placeholder={items.length ? 'Add more…' : 'What was it for?'}
+            placeholderTextColor={colors.textMuted}
+            textAlign="center"
+            accessibilityLabel="What was it for"
+          />
+        </View>
 
-            <ScrollView>
-              <Text style={styles.label}>Select Friend</Text>
-              <ScrollView horizontal style={styles.friendSelector} showsHorizontalScrollIndicator={false}>
-                {members.map((member) => (
-                  <TouchableOpacity
-                    key={member.user_id}
-                    style={[
-                      styles.friendChip,
-                      selectedFriend?.user_id === member.user_id && styles.friendChipSelected,
-                    ]}
-                    onPress={() => {
-                      setSelectedFriend(member);
-                      setFriendParticipantIds((prev) =>
-                        prev.includes(member.user_id) ? prev : [...prev, member.user_id],
-                      );
-                    }}
-                  >
-                    <Avatar
-                      uri={member.profile}
-                      label={member.name || member.email}
-                      size={28}
-                      fontSize={14}
-                      backgroundColor={colors.purpleAvatar}
-                      textColor={colors.textSecondary}
-                      style={styles.friendAvatarFallback}
-                    />
-                    <Text style={styles.friendName}>{member.name || member.email}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+        {/* Frequent items */}
+        <View style={styles.suggestions}>
+          {frequentItems.map((label) => {
+            const active = items.some((x) => x.toLowerCase() === label.toLowerCase());
+            return (
+              <TouchableOpacity
+                key={label}
+                style={[styles.suggestion, active && styles.suggestionActive]}
+                onPress={() => toggleSuggestion(label)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={label}
+              >
+                <Text style={[styles.suggestionText, active && styles.suggestionTextActive]} numberOfLines={1}>
+                  {label.length > 10 ? `${label.slice(0, 10).trimEnd()}…` : label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
 
-              <GroceryHeroForm
-                title="ADD FOR FRIEND"
-                amount={friendPrice}
-                onAmountChange={setFriendPrice}
-                description={friendGrocery}
-                onDescriptionChange={setFriendGrocery}
-                date={friendDate}
-                onDatePress={() => {
-                  friendDatePickerRef.current?.open();
-                  setShowFriendDatePicker(true);
-                }}
-                onClearDate={() => setFriendDate(null)}
-                participantSlot={
-                  <ParticipantPicker
-                    members={members}
-                    selectedIds={friendParticipantIds}
-                    onToggle={toggleFriendParticipant}
-                    visible={showFriendParticipantPicker}
-                    onOpen={() => setShowFriendParticipantPicker(true)}
-                    onClose={() => setShowFriendParticipantPicker(false)}
-                    lockedUserId={selectedFriend?.user_id}
-                    narrow={narrow}
-                  />
-                }
-                onSubmit={handleAddForFriend}
-                loading={friendLoading}
-                msg={friendMsg}
-                submitLabel="Add Expense"
-                narrow={narrow}
-              />
+      {/* Top of the screen so the keyboard never hides it */}
+      {toast && (
+        <View style={styles.toast} accessibilityLiveRegion="polite">
+          <Ionicons name="checkmark-circle" size={18} color={colors.greenBorder} />
+          <Text style={styles.toastText} numberOfLines={2}>
+            {toast.text}
+          </Text>
+          {/* The payer, or the admin who added it for them, may delete it. */}
+          <TouchableOpacity onPress={handleUndo} style={styles.toastUndo}>
+            <Text style={styles.toastUndoText}>Undo</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-              <CrossPlatformDatePicker
-                ref={friendDatePickerRef}
-                isVisible={showFriendDatePicker}
-                mode="date"
-                date={friendDate ?? new Date()}
-                maximumDate={new Date()}
-                onConfirm={(d) => { setFriendDate(d); setShowFriendDatePicker(false); }}
-                onCancel={() => setShowFriendDatePicker(false)}
-              />
-            </ScrollView>
+      {/* Bottom bar: paid by · date, then submit */}
+      <View style={[styles.actionBar, { paddingBottom: insets.bottom + 16 }]}>
+        {error !== '' && (
+          <View style={styles.errorPill}>
+            <Text style={styles.errorText}>{error}</Text>
           </View>
-        </KeyboardAvoidingView>
+        )}
+
+        <View style={styles.detailsRow}>
+          {isAdmin ? (
+            <TouchableOpacity
+              style={styles.chip}
+              onPress={() => setPayerMenuOpen(true)}
+              accessibilityLabel={`Paid by ${payerLabel}`}
+              hitSlop={8}
+            >
+              <Avatar
+                uri={payer?.profile}
+                label={payer?.name || payer?.email || '?'}
+                size={20}
+                fontSize={10}
+                backgroundColor={colors.purpleAvatar}
+                textColor={colors.brand}
+              />
+              <Text style={styles.chipText} numberOfLines={1}>
+                <Text style={styles.chipLabel}>Paid by: </Text>
+                {payerLabel}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color={colors.textLight} />
+            </TouchableOpacity>
+          ) : (
+            <View style={[styles.chip, styles.chipStatic]}>
+              <Avatar
+                uri={user?.profile}
+                label={user?.name || user?.email || '?'}
+                size={20}
+                fontSize={10}
+                backgroundColor={colors.purpleAvatar}
+                textColor={colors.brand}
+              />
+              <Text style={styles.chipText} numberOfLines={1}>
+                <Text style={styles.chipLabel}>Paid by: </Text>
+                You
+              </Text>
+            </View>
+          )}
+          <TouchableOpacity
+            style={styles.chip}
+            onPress={() => {
+              datePickerRef.current?.open();
+              setShowDatePicker(true);
+            }}
+            accessibilityLabel={`Date ${dateLabel}`}
+            hitSlop={8}
+          >
+            <Ionicons name="calendar-outline" size={14} color={colors.brandDark} />
+            <Text style={[styles.chipText, styles.chipDateText]} numberOfLines={1}>
+              {dateLabel}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <ActionButton
+          testID="submit-button-ADD EXPENSE"
+          style={styles.submit}
+          gradientColors={canSubmit ? [colors.brand, colors.brandDark] : [colors.textMuted, colors.textMuted]}
+          onPress={handleAdd}
+          loading={addExpenseMutation.isPending}
+          disabled={!canSubmit}
+        >
+          <Text style={styles.submitText}>{canSubmit ? `Add ${formatAmount(numericAmount)}` : 'Add expense'}</Text>
+        </ActionButton>
+      </View>
+
+      <CrossPlatformDatePicker
+        ref={datePickerRef}
+        isVisible={showDatePicker}
+        mode="date"
+        date={date}
+        maximumDate={new Date()}
+        onConfirm={(d) => {
+          setDate(d);
+          setShowDatePicker(false);
+        }}
+        onCancel={() => setShowDatePicker(false)}
+      />
+
+      <Modal visible={payerMenuOpen} transparent animationType="fade" onRequestClose={() => setPayerMenuOpen(false)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setPayerMenuOpen(false)}>
+          <View style={[styles.menu, { bottom: insets.bottom + 150 }]}>
+            <Text style={styles.menuTitle}>Paid by</Text>
+            {members.map((m) => {
+              const selected = m.user_id === payerId;
+              const label = m.user_id === user?.id ? 'You' : m.name || m.email;
+              return (
+                <TouchableOpacity
+                  key={m.user_id}
+                  style={[styles.menuItem, selected && styles.menuItemSelected]}
+                  onPress={() => pickPayer(m.user_id)}
+                  accessibilityRole="menuitem"
+                  accessibilityState={{ selected }}
+                >
+                  <Avatar
+                    uri={m.profile}
+                    label={m.name || m.email}
+                    size={28}
+                    fontSize={12}
+                    backgroundColor={colors.purpleAvatar}
+                    textColor={colors.brand}
+                  />
+                  <Text style={styles.menuItemText} numberOfLines={1}>
+                    {label}
+                  </Text>
+                  {selected && <Ionicons name="checkmark" size={18} color={colors.brand} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Pressable>
       </Modal>
     </View>
   );
@@ -682,43 +575,93 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   scrollContent: {
     flexGrow: 1,
-    padding: 24,
-    paddingBottom: 32,
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
-  pageWrap: {
-    flex: 1,
+  splitSection: {
+    paddingTop: 4,
+    paddingBottom: 4,
   },
-  middleGroup: {
-    flex: 1,
+  splitHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  perHead: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.brandDark,
+  },
+  splitRow: {
+    gap: 4,
+  },
+  splitPerson: {
+    width: 60,
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+  },
+  avatarRing: {
+    borderRadius: 999,
+    padding: 2,
+    borderWidth: 2,
+  },
+  avatarRingOn: {
+    borderColor: colors.brandMid,
+  },
+  avatarRingOff: {
+    borderColor: 'transparent',
+    opacity: 0.35,
+  },
+  checkBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.brand,
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  eyebrow: {
+  splitName: {
     fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-    color: colors.brand,
-    marginTop: 8,
-    marginBottom: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  splitNameOff: {
+    color: colors.textMuted,
+    textDecorationLine: 'line-through',
   },
   amountRow: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    marginBottom: 8,
+    marginTop: 12,
   },
   rupeeSymbol: {
-    fontSize: 28,
-    fontWeight: '300',
+    fontSize: 32,
+    fontWeight: '500',
     color: colors.brand,
-    marginRight: 2,
+    marginRight: 4,
   },
   amountInput: {
-    fontSize: 64,
-    fontWeight: '700',
+    fontSize: 60,
+    fontWeight: '800',
     color: colors.textPrimary,
     borderWidth: 0,
     outlineWidth: 0,
@@ -735,184 +678,234 @@ const styles = StyleSheet.create({
     opacity: 0,
     left: -9999,
   },
-  descriptionInput: {
-    borderWidth: 0,
+  chipField: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 54,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     borderBottomWidth: 2,
-    borderColor: colors.purple200,
-    outlineWidth: 0,
-    outlineStyle: 'none',
-    fontSize: 20,
-    fontWeight: '500',
-    color: colors.textPrimary,
-    paddingVertical: 10,
-    marginBottom: 8,
-    textAlign: 'center',
-  } as any,
-  descriptionInputFocused: {
-    borderColor: colors.brand,
+    borderBottomColor: colors.purple200,
   },
-  toolbar: {
+  itemChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.purple100,
-    paddingTop: 16,
-    marginTop: 28,
+    gap: 2,
+    minHeight: 36,
+    paddingLeft: 12,
+    paddingRight: 4,
+    borderRadius: 999,
+    backgroundColor: colors.purple100,
+    borderWidth: 1,
+    borderColor: colors.purple200,
   },
-  toolbarNarrow: {
+  itemChipText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.brandDark,
+  },
+  itemChipRemove: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipInput: {
+    flexGrow: 1,
+    minWidth: 120,
+    fontSize: 19,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    paddingVertical: 6,
+    outlineWidth: 0,
+    outlineStyle: 'none',
+  } as any,
+  suggestions: {
+    marginTop: 14,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: 8,
   },
-  actionBarWrap: {
+  suggestion: {
+    minHeight: 40,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: colors.purple200,
+    backgroundColor: colors.cardBg,
+    justifyContent: 'center',
+  },
+  suggestionActive: {
+    borderColor: colors.brand,
+    backgroundColor: colors.brand,
+  },
+  suggestionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.brandDark,
+  },
+  suggestionTextActive: {
+    color: '#fff',
+  },
+  actionBar: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: colors.background,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.purple100,
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
-  toolbarInBar: {
-    borderTopWidth: 0,
-    paddingTop: 0,
-    marginTop: 0,
-  },
-  pillBtn: {
+  toast: {
+    position: 'absolute',
+    top: 8,
+    left: 16,
+    right: 16,
+    zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.textPrimary,
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingLeft: 14,
+    paddingRight: 6,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+  },
+  toastText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  toastUndo: {
+    minHeight: 40,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+  },
+  toastUndoText: {
+    color: colors.purple200,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  errorPill: {
+    alignSelf: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: colors.dangerLight,
+    borderWidth: 1,
+    borderColor: colors.redBorder,
+  },
+  errorText: {
+    color: colors.dangerDark,
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  chip: {
     flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
+    // 3 + 1px border keeps the same height as before.
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.purple200,
     backgroundColor: colors.purple100,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
   },
-  pillBtnNarrow: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    gap: 4,
+  // Members can't change the payer, so it shouldn't look tappable.
+  chipStatic: {
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
   },
-  pillBtnText: { color: colors.brand, fontWeight: '500', fontSize: 14, flexShrink: 1 },
-  pillBtnTextMuted: { color: colors.textMuted },
-  participantRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
+  chipText: {
+    flexShrink: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
-  submitWrap: {
-    marginTop: 20,
+  chipLabel: {
+    fontWeight: '500',
+    color: colors.textSecondary,
   },
-  submitGradient: {
+  chipDateText: {
+    color: colors.brandDark,
+  },
+  submit: {
+    marginTop: 12,
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
   },
   submitText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
   },
-  msgPill: {
-    marginTop: 8,
-    marginBottom: 4,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignSelf: 'center',
-  },
-  msgPillSuccess: {
-    backgroundColor: colors.successLight,
-    borderWidth: 1,
-    borderColor: colors.greenBorder,
-  },
-  msgPillError: {
-    backgroundColor: colors.dangerLight,
-    borderWidth: 1,
-    borderColor: colors.redBorder,
-  },
-  msgPillText: {
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  msgPillTextSuccess: { color: colors.successDark },
-  msgPillTextError: { color: colors.dangerDark },
-  modalOverlay: {
+  menuBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    padding: 16,
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
-  modalContent: {
+  menu: {
+    position: 'absolute',
+    left: 16,
+    width: 220,
     backgroundColor: colors.cardBg,
-    borderRadius: 16,
-    padding: 24,
-    maxHeight: '85%',
+    borderRadius: 14,
+    padding: 6,
+    borderWidth: 1,
+    borderColor: colors.purple200,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
+  menuTitle: {
+    fontSize: 12,
     fontWeight: '700',
-    color: colors.textPrimary,
+    color: colors.textLight,
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    paddingBottom: 4,
   },
-  closeBtn: {
-    fontSize: 20,
-    color: colors.textMuted,
-    fontWeight: '700',
-    padding: 4,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
-  friendSelector: {
-    marginBottom: 16,
-  },
-  friendChip: {
+  menuItem: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.neutralLight,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    gap: 10,
+    paddingHorizontal: 10,
+    borderRadius: 10,
   },
-  friendChipSelected: {
-    borderColor: colors.brand,
+  menuItemSelected: {
     backgroundColor: colors.purple100,
   },
-  friendAvatarFallback: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.purpleAvatar,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  friendAvatarText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  friendName: {
-    fontSize: 14,
-    fontWeight: '500',
+  menuItemText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
     color: colors.textPrimary,
   },
 });

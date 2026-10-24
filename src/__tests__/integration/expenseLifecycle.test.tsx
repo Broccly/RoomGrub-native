@@ -56,24 +56,28 @@ describe('expense lifecycle flow', () => {
     jest.clearAllMocks();
     mockedUseUserRole.mockReturnValue({ role: 'Member' });
     mockedApi.listMembers.mockResolvedValue(mockMembers);
-    mockedApi.listExpenses
-      .mockResolvedValueOnce({ items: [], next_cursor: null })
-      .mockResolvedValueOnce(mockPaginatedExpenses);
-    mockedApi.createExpense.mockResolvedValue(mockPaginatedExpenses.items[0]);
+    mockedApi.getFrequentItems.mockResolvedValue({ items: [] });
+    let created = false;
+    mockedApi.listExpenses.mockImplementation(async () =>
+      created ? mockPaginatedExpenses : { items: [], next_cursor: null },
+    );
+    mockedApi.createExpense.mockImplementation(async () => {
+      created = true;
+      return mockPaginatedExpenses.items[0];
+    });
   });
 
   it('creates an expense from AddGroceryScreen and sees it after returning to ExpensesScreen', async () => {
     renderApp();
 
     await waitFor(() => expect(screen.getByText('No expenses found')).toBeTruthy());
-    expect(mockedApi.listExpenses).toHaveBeenCalledTimes(1);
 
     fireEvent.press(screen.getByText('Go to Add Grocery'));
-    await waitFor(() => expect(screen.getByPlaceholderText('What did you buy?')).toBeTruthy());
+    await waitFor(() => expect(screen.getByPlaceholderText('What was it for?')).toBeTruthy());
 
     fireEvent.changeText(screen.getByTestId('amount-input-ADD EXPENSE'), '50');
-    fireEvent.changeText(screen.getByPlaceholderText('What did you buy?'), 'Milk');
-    fireEvent.press(screen.getByText('Add Expense'));
+    fireEvent.changeText(screen.getByPlaceholderText('What was it for?'), 'Milk');
+    fireEvent.press(screen.getByText('Add ₹50'));
 
     await waitFor(() =>
       expect(mockedApi.createExpense).toHaveBeenCalledWith(10, {
@@ -83,6 +87,6 @@ describe('expense lifecycle flow', () => {
         participant_user_ids: [1, 2],
       }),
     );
-    expect(screen.getByText('🎉 Expense added!')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Added ₹50 · Milk')).toBeTruthy());
   });
 });
