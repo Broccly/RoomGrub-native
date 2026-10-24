@@ -1,6 +1,7 @@
-import { clearSession, request, setSession, setUnauthorizedHandler } from './httpClient';
+import { ApiError, clearSession, request, setSession, setUnauthorizedHandler } from './httpClient';
 import * as tokenStorage from '../utils/tokenStorage';
 import { getAuthBootstrap, setAuthBootstrap } from '../utils/authBootstrap';
+import { getLastRoomId, setLastRoomId } from '../utils/lastRoom';
 
 jest.mock('../utils/tokenStorage');
 
@@ -106,6 +107,20 @@ describe('httpClient.request', () => {
     await expect(request('/rooms/999', 'GET')).rejects.toThrow('Room not found');
   });
 
+  it.each([
+    [404, 'Room not found'],
+    [400, 'The payer must be part of the split'],
+  ])('rejects a %i with an ApiError carrying the status and server detail', async (status, detail) => {
+    fetchMock().mockResolvedValueOnce(jsonResponse({ detail }, status));
+
+    const error = (await request('/rooms/999', 'GET').catch((e: unknown) => e)) as ApiError;
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.status).toBe(status);
+    expect(error.message).toBe(detail);
+  });
+
   it('throws a generic message when non-OK response has no detail', async () => {
     fetchMock().mockResolvedValueOnce(jsonResponse({}, 500));
 
@@ -116,6 +131,14 @@ describe('httpClient.request', () => {
     fetchMock().mockRejectedValueOnce(new Error('network down'));
 
     await expect(request('/rooms', 'GET')).rejects.toThrow('Failed to reach backend');
+  });
+
+  it('forgets the last opened room on sign-out', async () => {
+    setLastRoomId(10);
+
+    await clearSession();
+
+    expect(getLastRoomId()).toBeNull();
   });
 
   describe('token refresh', () => {

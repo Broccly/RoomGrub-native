@@ -31,7 +31,8 @@ describe('SplitsScreen', () => {
   it('shows the all-clear state when there are no pending settlements', async () => {
     mockedUseUserRole.mockReturnValue({ role: 'Member' });
     mockedApi.getSplits.mockResolvedValue({
-      members: [{ user_email: 'a@x.com', name: 'A', profile: null, pending_amount: 0 }],
+      ...mockSplitsData,
+      members: [{ ...mockSplitsData.members[0], user_email: 'a@x.com', name: 'A', pending_amount: 0 }],
       unsettled_expenses: [],
       settlements: [],
     });

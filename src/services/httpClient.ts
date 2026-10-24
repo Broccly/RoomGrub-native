@@ -1,5 +1,6 @@
 import { getRefreshToken, setRefreshToken, clearRefreshToken, clearUser } from '../utils/tokenStorage';
 import { setAuthBootstrap } from '../utils/authBootstrap';
+import { setLastRoomId } from '../utils/lastRoom';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 const REQUEST_TIMEOUT_MS = 15000;
@@ -15,6 +16,18 @@ type RequestOptions = {
   /** Set false for endpoints that must not attach a bearer token (e.g. login). */
   auth?: boolean;
 };
+
+// The message is the server's `detail`, so `error.message` reads as before;
+// `status` lets callers tell e.g. a deleted room (404) from other failures.
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
 
 type SessionTokens = {
   access_token: string;
@@ -47,6 +60,8 @@ export async function clearSession(): Promise<void> {
   accessToken = null;
   await clearRefreshToken();
   await clearUser();
+  // The next account on this device shouldn't land in this user's room.
+  setLastRoomId(null);
   // Screens mounted after this (e.g. Login) read auth state from the cached
   // bootstrap — leaving the old user there bounces them straight back into
   // AuthCallback and loops until the app is killed.
@@ -163,7 +178,7 @@ export async function request<T>(
       typeof data === 'object' && data !== null && 'detail' in data
         ? String((data as { detail: unknown }).detail)
         : `Request failed (${response.status})`;
-    throw new Error(detail);
+    throw new ApiError(response.status, detail);
   }
 
   return data as T;

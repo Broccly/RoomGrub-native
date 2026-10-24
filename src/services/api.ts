@@ -3,11 +3,13 @@ import {
   DashboardResponse,
   ExpenseDetail,
   ExpenseItem,
+  FrequentItems,
   InviteAcceptResponse,
   InviteResponse,
   MemberDetail,
   PaginatedExpenses,
   Role,
+  RoomBase,
   RoomListItem,
   RoomSummary,
   SplitsData,
@@ -19,7 +21,7 @@ type Query = Record<string, string | number | boolean | undefined>;
 export const api = {
   listRooms: () => request<RoomListItem[]>('/rooms', 'GET'),
 
-  createRoom: () => request<RoomListItem>('/rooms', 'POST'),
+  createRoom: () => request<RoomBase>('/rooms', 'POST'),
 
   getRoomSummary: (roomId: number) => request<RoomSummary>(`/rooms/${roomId}`, 'GET'),
 
@@ -76,7 +78,8 @@ export const api = {
   updateExpense: (
     roomId: number,
     expenseId: number,
-    payload: { material?: string; money?: number; created_at?: string },
+    // Send only what changed: money or participant changes re-split the expense.
+    payload: { material?: string; money?: number; created_at?: string; participant_user_ids?: number[] },
   ) => request<ExpenseItem>(`/rooms/${roomId}/expenses/${expenseId}`, 'PATCH', { payload }),
 
   deleteExpense: (roomId: number, expenseId: number) =>
@@ -85,7 +88,15 @@ export const api = {
   getExpenseDetail: (roomId: number, expenseId: number) =>
     request<ExpenseDetail>(`/rooms/${roomId}/expenses/${expenseId}`, 'GET'),
 
-  getSplits: (roomId: number) => request<SplitsData>(`/rooms/${roomId}/splits`, 'GET'),
+  getSplits: (roomId: number, opts?: { includeExpenses?: boolean }) =>
+    request<SplitsData>(`/rooms/${roomId}/splits`, 'GET', {
+      query: opts?.includeExpenses === false ? { include_expenses: false } : undefined,
+    }),
+
+  getFrequentItems: (roomId: number, limit?: number) =>
+    request<FrequentItems>(`/rooms/${roomId}/expenses/frequent-items`, 'GET', {
+      query: limit === undefined ? undefined : { limit },
+    }),
 
   settleOne: (roomId: number, userEmail: string, pendingAmount: number) =>
     request<void>(`/rooms/${roomId}/splits/settle`, 'POST', {

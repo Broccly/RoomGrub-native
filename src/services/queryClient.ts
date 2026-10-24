@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+import { ApiError } from './httpClient';
 
 type ExpenseQuery = Record<string, string | number | boolean | undefined>;
 
@@ -7,7 +8,9 @@ export const queryClient = new QueryClient({
     queries: {
       staleTime: 30_000,
       gcTime: 24 * 60 * 60 * 1000,
-      retry: 1,
+      // Retry once, but not a 4xx: asking again for a deleted room just answers 404 again.
+      retry: (failureCount, error) =>
+        !(error instanceof ApiError && error.status < 500) && failureCount < 1,
       refetchOnReconnect: true,
     },
   },
