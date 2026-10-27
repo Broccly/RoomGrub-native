@@ -110,7 +110,7 @@ export default function HomeScreen({ navigation }: any) {
   const myNet = me?.pending_amount ?? 0;
   const netStatus = myNet > BALANCE_EPSILON ? 'credit' : myNet < -BALANCE_EPSILON ? 'debit' : 'even';
   const myTransfers = splits.settlements
-    .filter((s) => s.from_user_id === myId || s.to_user_id === myId)
++    .filter((s) => (s.from_user_id === myId || s.to_user_id === myId) && Math.abs(s.amount) > BALANCE_EPSILON)
     .map((s) => {
       const owesMe = s.to_user_id === myId;
       const otherId = owesMe ? s.from_user_id : s.to_user_id;
