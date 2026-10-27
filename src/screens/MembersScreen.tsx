@@ -52,6 +52,7 @@ export default function MembersScreen({ navigation, route }: any) {
       setEditModal({ open: false, member: null });
       // Balances, splits and the dashboard all change when someone leaves.
       queryClient.invalidateQueries({ queryKey: queryKeys.room(room_id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.rooms });
     },
     onError: (error) => {
       showAlert('Error', error instanceof Error ? error.message : 'Failed to remove member');
