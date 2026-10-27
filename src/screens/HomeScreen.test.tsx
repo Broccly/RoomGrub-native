@@ -134,6 +134,21 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Since last settle-up · 0 expenses')).toBeTruthy();
   });
 
+  it('hides rounding-dust settlements', async () => {
+    mockedApi.getSplits.mockResolvedValue({
+      ...splits,
+      members: [
+        { ...alice, pending_amount: 0.004 },
+        { ...bob, pending_amount: -0.004 },
+      ],
+      settlements: [{ ...splits.settlements[0], amount: 0.004 }],
+    });
+    renderWithProviders(<HomeScreen navigation={makeNavigationMock()} />);
+
+    await waitFor(() => expect(screen.getByText('You are square with everyone')).toBeTruthy());
+    expect(screen.queryByText('Bob owes you')).toBeNull();
+  });
+
   it('breaks down unsettled room spending per member', async () => {
     renderWithProviders(<HomeScreen navigation={makeNavigationMock()} />);
 
