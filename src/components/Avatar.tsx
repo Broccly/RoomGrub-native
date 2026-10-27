@@ -24,8 +24,9 @@ export default function Avatar({
   fontSize,
   style,
 }: AvatarProps) {
-  const [failed, setFailed] = useState(false);
-  const showImage = !!uri && !failed;
+  // Remember which uri failed so a different photo in this slot still gets a try.
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  const showImage = !!uri && uri !== failedUri;
 
   const containerStyle: ViewStyle = {
     width: size,
@@ -44,7 +45,7 @@ export default function Avatar({
         <Image
           source={{ uri }}
           style={styles.image}
-          onError={() => setFailed(true)}
+          onError={() => setFailedUri(uri)}
         />
       ) : (
         <Text style={{ fontSize: fontSize ?? size * 0.4, fontWeight: '700', color: textColor }}>

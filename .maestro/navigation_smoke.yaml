@@ -37,10 +37,5 @@ appId: com.roomgrub.app
     optional: true
 - assertVisible: "Room Settings"
 
-- tapOn: "Activity History"
-- assertVisible:
-    text: "Activity History|No activity"
-- back
-
 - back
 - assertVisible: "Your Rooms"

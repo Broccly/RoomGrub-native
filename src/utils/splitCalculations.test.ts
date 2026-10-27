@@ -15,7 +15,7 @@ describe('computeSplitsFiltered', () => {
   it('treats balances within epsilon as even', () => {
     const data: SplitsData = {
       ...mockSplitsData,
-      members: [{ user_email: 'alice@example.com', name: 'Alice', profile: null, pending_amount: 0.001 }],
+      members: [{ ...mockSplitsData.members[0], pending_amount: 0.001 }],
     };
 
     const result = computeSplitsFiltered(data);
@@ -55,7 +55,14 @@ describe('computeSplitsFiltered', () => {
   });
 
   it('returns zero balances and no expenses for an empty room', () => {
-    const empty: SplitsData = { members: [], unsettled_expenses: [], settlements: [] };
+    const empty: SplitsData = {
+      ...mockSplitsData,
+      members: [],
+      unsettled_expenses: [],
+      settlements: [],
+      total_pending: 0,
+      unsettled_count: 0,
+    };
     const result = computeSplitsFiltered(empty);
 
     expect(result.totalPendingExpenses).toBe(0);

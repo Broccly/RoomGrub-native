@@ -4,6 +4,7 @@ import {
   ExpenseItem,
   MemberDetail,
   PaginatedExpenses,
+  RoomBase,
   RoomListItem,
   RoomSummary,
   SplitsData,
@@ -18,14 +19,22 @@ export const mockUser: StoredUser = {
   profile: null,
 };
 
-export const mockRoom: RoomListItem = {
+const mockRoomBase: RoomBase = {
   id: 10,
   members: 2,
   admin: 'alice@example.com',
 };
 
+export const mockRoom: RoomListItem = {
+  ...mockRoomBase,
+  member_preview: [
+    { profile: null, label: 'Alice' },
+    { profile: null, label: 'Bob' },
+  ],
+};
+
 export const mockRoomSummary: RoomSummary = {
-  ...mockRoom,
+  ...mockRoomBase,
   total_spent: 500,
   pending_amount: 100,
   recent_expenses: [
@@ -34,26 +43,10 @@ export const mockRoomSummary: RoomSummary = {
 };
 
 export const mockDashboard: DashboardResponse = {
-  room: mockRoom,
+  room: mockRoomBase,
   members: [
-    {
-      user_id: 1,
-      email: 'alice@example.com',
-      name: 'Alice',
-      profile: null,
-      role: 'Admin',
-      total_spent: 300,
-      pending_amount: 50,
-    },
-    {
-      user_id: 2,
-      email: 'bob@example.com',
-      name: 'Bob',
-      profile: null,
-      role: 'Member',
-      total_spent: 200,
-      pending_amount: -50,
-    },
+    { user_id: 1, name: 'Alice', profile: null, pending_amount: 50 },
+    { user_id: 2, name: 'Bob', profile: null, pending_amount: -50 },
   ],
 };
 
@@ -104,19 +97,45 @@ export const mockExpenseDetail: ExpenseDetail = {
 
 export const mockSplitsData: SplitsData = {
   members: [
-    { user_email: 'alice@example.com', name: 'Alice', profile: null, pending_amount: 50 },
-    { user_email: 'bob@example.com', name: 'Bob', profile: null, pending_amount: -50 },
+    {
+      user_id: 1,
+      user_email: 'alice@example.com',
+      name: 'Alice',
+      profile: null,
+      role: 'Admin',
+      pending_amount: 50,
+      unsettled_spent: 50,
+      unsettled_share: 0,
+      total_spent: 300,
+    },
+    {
+      user_id: 2,
+      user_email: 'bob@example.com',
+      name: 'Bob',
+      profile: null,
+      role: 'Member',
+      pending_amount: -50,
+      unsettled_spent: 0,
+      unsettled_share: 50,
+      total_spent: 200,
+    },
   ],
   unsettled_expenses: [
     { id: 1, user: 'alice@example.com', material: 'Milk', money: 50, created_at: '2026-07-01T00:00:00Z' },
   ],
   settlements: [
     {
+      from_user_id: 2,
       from_user_email: 'bob@example.com',
       from_name: 'Bob',
+      to_user_id: 1,
       to_user_email: 'alice@example.com',
       to_name: 'Alice',
       amount: 50,
     },
   ],
+  total_pending: 50,
+  unsettled_count: 1,
+  total_spent: 500,
+  last_settled_at: null,
 };

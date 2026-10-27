@@ -99,22 +99,6 @@ export default function SettingsScreen({ navigation, route }: any) {
       <View style={styles.card}>
         <TouchableOpacity
           style={styles.settingRow}
-          onPress={() =>
-            navigation.navigate('ActivityHistory', { room_id: route.params?.room_id })
-          }
-        >
-          <Ionicons name="time-outline" size={22} color="#9333ea" />
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>Activity History</Text>
-            <Text style={styles.settingHint}>View all room activities</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#999" />
-        </TouchableOpacity>
-
-        <View style={styles.divider} />
-
-        <TouchableOpacity
-          style={styles.settingRow}
           onPress={() => navigation.navigate('ContactSupport')}
         >
           <Ionicons name="headset-outline" size={22} color="#9333ea" />

@@ -1,9 +1,20 @@
 export type Role = 'Admin' | 'Member';
 
-export type RoomListItem = {
+export type RoomBase = {
   id: number;
   members: number;
   admin: string;
+};
+
+// Enough to draw one avatar: the photo, or initials from `label` when there is none.
+export type MemberPreview = {
+  profile: string | null;
+  label: string;
+};
+
+export type RoomListItem = RoomBase & {
+  // The first few members by join date.
+  member_preview: MemberPreview[];
 };
 
 export type ExpenseSummaryItem = {
@@ -14,7 +25,7 @@ export type ExpenseSummaryItem = {
   created_at: string;
 };
 
-export type RoomSummary = RoomListItem & {
+export type RoomSummary = RoomBase & {
   total_spent: number;
   pending_amount: number;
   recent_expenses: ExpenseSummaryItem[];
@@ -22,16 +33,13 @@ export type RoomSummary = RoomListItem & {
 
 export type MemberStat = {
   user_id: number;
-  email: string;
   name: string | null;
   profile: string | null;
-  role: Role;
-  total_spent: number;
   pending_amount: number;
 };
 
 export type DashboardResponse = {
-  room: RoomListItem;
+  room: RoomBase;
   members: MemberStat[];
 };
 
@@ -75,10 +83,19 @@ export type PaginatedExpenses = {
 };
 
 export type SplitMemberBalance = {
+  user_id: number;
   user_email: string;
   name: string | null;
   profile: string | null;
+  // null for someone who has left the room but still has a balance.
+  role: Role | null;
+  // Net balance: positive = the room owes them, negative = they owe.
   pending_amount: number;
+  // Paid by them, and their share, across unsettled expenses.
+  unsettled_spent: number;
+  unsettled_share: number;
+  // Paid by them in this room, settled or not.
+  total_spent: number;
 };
 
 export type UnsettledExpense = {
@@ -90,8 +107,10 @@ export type UnsettledExpense = {
 };
 
 export type SplitSettlement = {
+  from_user_id: number;
   from_user_email: string;
   from_name: string | null;
+  to_user_id: number;
   to_user_email: string;
   to_name: string | null;
   amount: number;
@@ -99,8 +118,19 @@ export type SplitSettlement = {
 
 export type SplitsData = {
   members: SplitMemberBalance[];
+  // Empty when fetched with includeExpenses: false.
   unsettled_expenses: UnsettledExpense[];
   settlements: SplitSettlement[];
+  // Sum of unsettled expenses, and how many there are.
+  total_pending: number;
+  unsettled_count: number;
+  // Sum of every expense in the room, settled or not.
+  total_spent: number;
+  last_settled_at: string | null;
+};
+
+export type FrequentItems = {
+  items: string[];
 };
 
 export type ExpenseParticipant = {

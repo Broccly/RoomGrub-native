@@ -10,40 +10,38 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery, useQueries } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Avatar from '../components/Avatar';
 import { useAuth } from '../hooks/useAuth';
 import ActionButton from '../components/ActionButton';
 import { api } from '../services/api';
 import { queryKeys } from '../services/queryClient';
 import { colors } from '../theme/colors';
-import { Role, RoomListItem, UserSummary } from '../types/api';
+import { showAlert } from '../utils/alert';
 
 const MAX_VISIBLE_AVATARS = 4;
-
-type RoomWithRole = RoomListItem & { role: Role | null; memberList: UserSummary[] };
 
 export default function RoomsListScreen({ navigation }: any) {
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
 
   const roomsQuery = useQuery({
     queryKey: queryKeys.rooms,
     queryFn: api.listRooms,
   });
-  const roomList = roomsQuery.data ?? [];
+  // Each room carries its first few members' avatars, so no per-room /members call.
+  const rooms = roomsQuery.data ?? [];
 
-  const membersQueries = useQueries({
-    queries: roomList.map((room) => ({
-      queryKey: queryKeys.members(room.id),
-      queryFn: () => api.listMembers(room.id),
-    })),
-  });
-
-  const rooms: RoomWithRole[] = roomList.map((room, index) => {
-    const members = membersQueries[index]?.data ?? [];
-    const me = members.find((m) => m.email === user?.email);
-    return { ...room, role: me?.role ?? null, memberList: members };
+  const createRoomMutation = useMutation({
+    mutationFn: api.createRoom,
+    onSuccess: (room) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.rooms });
+      navigation.navigate('RoomHome', { room_id: room.id });
+    },
+    onError: (error) => {
+      showAlert('Error', error instanceof Error ? error.message : 'Failed to create room');
+    },
   });
 
   const loading = roomsQuery.isPending;
@@ -97,7 +95,7 @@ export default function RoomsListScreen({ navigation }: any) {
           </View>
         ) : (
           rooms.map((room) => {
-            const visibleMembers = room.memberList.slice(0, MAX_VISIBLE_AVATARS);
+            const visibleMembers = (room.member_preview ?? []).slice(0, MAX_VISIBLE_AVATARS);
             const extraCount = room.members - visibleMembers.length;
 
             return (
@@ -112,9 +110,9 @@ export default function RoomsListScreen({ navigation }: any) {
                 <View style={styles.avatarRow}>
                   {visibleMembers.map((member, index) => (
                     <Avatar
-                      key={member.user_id ?? member.email ?? index}
+                      key={index}
                       uri={member.profile}
-                      label={member.name || member.email}
+                      label={member.label}
                       size={40}
                       backgroundColor="#ede9fe"
                       borderWidth={2}
@@ -137,13 +135,14 @@ export default function RoomsListScreen({ navigation }: any) {
         <View style={{ height: 96 }} />
       </ScrollView>
 
-      <TouchableOpacity
+      <ActionButton
         style={[styles.newRoomButton, { bottom: insets.bottom + 24 }]}
-        onPress={() => navigation.navigate('CreateRoom')}
+        onPress={() => createRoomMutation.mutate()}
+        loading={createRoomMutation.isPending}
       >
         <Ionicons name="add" size={20} color="#fff" />
         <Text style={styles.newRoomButtonText}>New Room</Text>
-      </TouchableOpacity>
+      </ActionButton>
     </View>
   );
 }
