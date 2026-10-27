@@ -289,6 +289,30 @@ export default function AddGroceryScreen({ route }: any) {
     );
   }
 
+  // Without members there is no one to split with, so offer a retry instead of a dead form.
+  if (membersQuery.isError && !membersQuery.data) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <Ionicons name="cloud-offline-outline" size={48} color={colors.textMuted} />
+        <Text style={styles.loadErrorText}>
+          {membersQuery.error instanceof Error ? membersQuery.error.message : "Couldn't load the room's members."}
+        </Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() => membersQuery.refetch()}
+          disabled={membersQuery.isFetching}
+          accessibilityRole="button"
+        >
+          {membersQuery.isFetching ? (
+            <ActivityIndicator color={colors.brand} />
+          ) : (
+            <Text style={styles.retryText}>Try again</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   const amountDisplay = formatAmountDisplay(amount);
   const perHead = numericAmount > 0 && participantIds.length > 0 ? numericAmount / participantIds.length : 0;
   const splitLabel =
@@ -578,6 +602,23 @@ const styles = StyleSheet.create({
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadErrorText: {
+    marginTop: 12,
+    marginHorizontal: 32,
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  retryText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.brand,
   },
   scrollContent: {
     flexGrow: 1,

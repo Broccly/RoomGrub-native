@@ -326,3 +326,29 @@ describe('AddGroceryScreen date', () => {
     );
   });
 });
+
+describe('AddGroceryScreen member load failure', () => {
+  it('shows the error with a retry instead of a dead form', async () => {
+    mockedApi.listMembers.mockRejectedValue(new Error('Network down'));
+    mockedUseUserRole.mockReturnValue({ role: 'Member' });
+    renderWithProviders(<AddGroceryScreen route={route} />);
+
+    await waitFor(() => expect(screen.getByText('Network down')).toBeTruthy());
+    expect(screen.getByText('Try again')).toBeTruthy();
+    expect(screen.queryByText(/Split with/)).toBeNull();
+  });
+
+  it('loads the form once a retry succeeds', async () => {
+    mockedApi.listMembers.mockRejectedValueOnce(new Error('Network down'));
+    mockedUseUserRole.mockReturnValue({ role: 'Member' });
+    renderWithProviders(<AddGroceryScreen route={route} />);
+
+    await waitFor(() => expect(screen.getByText('Try again')).toBeTruthy());
+    fireEvent.press(screen.getByText('Try again'));
+
+    await waitFor(() => expect(screen.getByText('Split with everyone')).toBeTruthy());
+    fireEvent.changeText(amountInput(), '50');
+    fireEvent.changeText(descriptionInput(), 'Milk');
+    expect(submitButton().props.accessibilityState.disabled).toBe(false);
+  });
+});
