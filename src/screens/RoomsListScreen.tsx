@@ -95,7 +95,7 @@ export default function RoomsListScreen({ navigation }: any) {
           </View>
         ) : (
           rooms.map((room) => {
-            const visibleMembers = room.member_preview.slice(0, MAX_VISIBLE_AVATARS);
+            const visibleMembers = (room.member_preview ?? []).slice(0, MAX_VISIBLE_AVATARS);
             const extraCount = room.members - visibleMembers.length;
 
             return (
