@@ -18,4 +18,16 @@ describe('Avatar', () => {
     fireEvent(screen.UNSAFE_getByType(require('react-native').Image), 'error');
     expect(screen.getByText('B')).toBeTruthy();
   });
+
+  it('tries again when a failed avatar is given a different uri', () => {
+    const { rerender } = render(<Avatar uri="https://example.com/broken.png" label="Asha" />);
+    fireEvent(screen.UNSAFE_getByType(require('react-native').Image), 'error');
+    expect(screen.getByText('A')).toBeTruthy();
+
+    rerender(<Avatar uri="https://example.com/ravi.png" label="Ravi" />);
+    expect(screen.queryByText('R')).toBeNull();
+    expect(screen.UNSAFE_getByType(require('react-native').Image).props.source).toEqual({
+      uri: 'https://example.com/ravi.png',
+    });
+  });
 });
