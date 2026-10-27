@@ -184,7 +184,7 @@ describe('AddGroceryScreen split with', () => {
 describe('AddGroceryScreen paid by', () => {
   it('shows a fixed "You" for members', async () => {
     await renderScreen('Member');
-    expect(screen.queryByLabelText('Paid by You')).toBeNull();
+    expect(screen.getByText('Paid by: You')).toBeTruthy();
   });
 
   it('defaults to "You" when the signed-in user loads after the first render', async () => {
